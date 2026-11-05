@@ -77,7 +77,7 @@ class Service:
             follow_redirects=True,
             limits=httpx.Limits(max_connections=12, max_keepalive_connections=8),
             headers={
-                "User-Agent": "astrbot_plugin_pjsk/1.2.2",
+                "User-Agent": "astrbot_plugin_pjsk/1.2.3",
                 "Accept-Encoding": "gzip, deflate",
             },
         )

@@ -2,7 +2,7 @@
 
 <img src="logo.png" width="128" height="128" alt="pjsk查询工具图标">
 
-适用于 AstrBot 4.29.1–4.x 的世界计划日服卡面查询插件。插件标识为 `astrbot_plugin_pjsk`，展示名为 **pjsk查询工具**。作者：lijunlin66，版本：1.2.2。
+适用于 AstrBot 4.29.1–4.x 的世界计划日服卡面查询插件。插件标识为 `astrbot_plugin_pjsk`，展示名为 **pjsk查询工具**。作者：lijunlin66，版本：1.2.3。
 
 ## 数据来源
 
@@ -21,7 +21,7 @@
 https://github.com/lijunlin66/pjsk_search_plugin
 ```
 
-也可上传 `astrbot_plugin_pjsk-1.2.2.zip`，然后启用。也可将此目录放入 `AstrBot/data/plugins/astrbot_plugin_pjsk` 后重载。依赖由 `requirements.txt` 声明：HTTPX、Pillow。Python 需 3.10 或以上，以所用 AstrBot 版本的 Python 要求为准。
+也可上传 `astrbot_plugin_pjsk-1.2.3.zip`，然后启用。也可将此目录放入 `AstrBot/data/plugins/astrbot_plugin_pjsk` 后重载。依赖由 `requirements.txt` 声明：HTTPX、Pillow。Python 需 3.10 或以上，以所用 AstrBot 版本的 Python 要求为准。
 
 默认无需密钥、游戏账号、浏览器或额外渲染服务。附带 Noto CJK 中日文字体及 OFL 许可证，Linux 容器也可直接绘图。需能访问 `sekai-world.github.io` 与 `storage.sekai.best`。当前声明和验证目标为 OneBot v11（`aiocqhttp`）；其他平台未做实际适配器验证。
 
@@ -111,6 +111,51 @@ https://github.com/lijunlin66/pjsk_search_plugin
 | cache_mb | 256 | 图片与成图磁盘缓存 MB，范围 64–2048 |
 | font_path | 空 | 自定义中日文字体绝对路径；空值自动选择字体 |
 | character_aliases | 空 | 每行 `别名=角色ID`，如 `小实=5` |
+
+### 角色ID与自定义别名
+
+在设置面板的“自定义角色别名”中，每行填写 `别名=角色ID`，例如：
+
+```text
+小实=5
+小遥=6
+葱葱=21
+```
+
+保存并重载插件后，可以用 `/查卡 小实` 或 `/查活动 小实` 搜索。角色 ID 用于配置别名，**不是卡片或活动编号**；直接输入 `/查卡 5` 或 `/查活动 5` 会按各自的卡片/活动编号查询。
+
+| 角色ID | 角色 | 团队 |
+| --- | --- | --- |
+| 1 | 星乃一歌 | Leo/need |
+| 2 | 天马咲希 | Leo/need |
+| 3 | 望月穗波 | Leo/need |
+| 4 | 日野森志步 | Leo/need |
+| 5 | 花里实乃里 | MORE MORE JUMP! |
+| 6 | 桐谷遥 | MORE MORE JUMP! |
+| 7 | 桃井爱莉 | MORE MORE JUMP! |
+| 8 | 日野森雫 | MORE MORE JUMP! |
+| 9 | 小豆泽心羽 | Vivid BAD SQUAD |
+| 10 | 白石杏 | Vivid BAD SQUAD |
+| 11 | 东云彰人 | Vivid BAD SQUAD |
+| 12 | 青柳冬弥 | Vivid BAD SQUAD |
+| 13 | 天马司 | Wonderlands×Showtime |
+| 14 | 凤笑梦 | Wonderlands×Showtime |
+| 15 | 草薙宁宁 | Wonderlands×Showtime |
+| 16 | 神代类 | Wonderlands×Showtime |
+| 17 | 宵崎奏 | 25時、ナイトコードで。 |
+| 18 | 朝比奈真冬 | 25時、ナイトコードで。 |
+| 19 | 东云绘名 | 25時、ナイトコードで。 |
+| 20 | 晓山瑞希 | 25時、ナイトコードで。 |
+| 21 | 初音未来 | VIRTUAL SINGER |
+| 22 | 镜音铃 | VIRTUAL SINGER |
+| 23 | 镜音连 | VIRTUAL SINGER |
+| 24 | 巡音流歌 | VIRTUAL SINGER |
+| 25 | MEIKO | VIRTUAL SINGER |
+| 26 | KAITO | VIRTUAL SINGER |
+
+同一个角色可配置多行不同别名；重复别名以最后一行配置为准，自定义别名会覆盖同名角色别名。只接受表中有效的角色 ID；请勿把卡片 ID 填入这里。虚拟歌手的角色 ID 不随支援团队变化；活动中需要指定支援团队时，可使用 `mmjrin` 等团队前缀写法。
+
+设置项采用简短名称，完整范围、默认值与补充规则放在提示中；“图片下载时限”和“自定义角色别名”的说明使用醒目提示显示。其余项目可查看名称旁的说明提示。
 
 ## 官方规范对应
 

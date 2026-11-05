@@ -1,7 +1,7 @@
 name: astrbot_plugin_pjsk
 display_name: pjsk查询工具
 desc: 日服世界计划卡面与活动图鉴，支持角色与团队别名、卡片ID、全部结果合成一张长图、花前花后及技能资料。数据来自可配置的日服游戏数据社区镜像，并非官方API。
-version: 1.2.2
+version: 1.2.3
 author: lijunlin66
 astrbot_version: ">=4.29.1,<5"
 support_platforms:

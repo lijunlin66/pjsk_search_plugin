@@ -1,10 +1,52 @@
 {
-  "master_base": {"description": "日服 master JSON 根地址（社区镜像，非官方API）", "type": "string", "default": "https://sekai-world.github.io/sekai-master-db-diff"},
-  "asset_base": {"description": "日服卡图根地址（社区镜像）", "type": "string", "default": "https://storage.sekai.best/sekai-jp-assets"},
-  "image_concurrency": {"description": "全局图片下载并发（1至8）", "type": "int", "default": 6},
-  "image_budget": {"description": "基础图片下载时限秒数（3至30）；全量图鉴按图片数量扩展，最多180秒", "type": "int", "default": 12},
-  "master_ttl_hours": {"description": "主数据检查更新间隔小时（1至168）", "type": "int", "default": 6},
-  "cache_mb": {"description": "图片及成图磁盘缓存上限MB（64至2048）", "type": "int", "default": 256},
-  "font_path": {"description": "可选，中日文字体绝对路径；为空自动寻找 Noto CJK / 微软雅黑", "type": "string", "default": ""},
-  "character_aliases": {"description": "额外角色别名，每行 别名=角色ID，例如 小实=5", "type": "text", "default": ""}
+  "master_base": {
+    "description": "日服主数据地址",
+    "type": "string",
+    "default": "https://sekai-world.github.io/sekai-master-db-diff",
+    "hint": "日服 master JSON 根地址，使用社区镜像，非官方开放 API。更换地址后请保存并重载插件。"
+  },
+  "asset_base": {
+    "description": "日服图片地址",
+    "type": "string",
+    "default": "https://storage.sekai.best/sekai-jp-assets",
+    "hint": "日服卡图社区镜像的根地址。更换地址后请保存并重载插件。"
+  },
+  "image_concurrency": {
+    "description": "图片下载并发数",
+    "type": "int",
+    "default": 6,
+    "hint": "同时下载图片的数量，范围 1–8，默认 6。网络不稳定时可适当降低。"
+  },
+  "image_budget": {
+    "description": "图片下载时限（秒）",
+    "type": "int",
+    "default": 12,
+    "hint": "基础图片下载时限，范围 3–30 秒，默认 12 秒。全量卡面图鉴会按图片数量延长等待时间，最长 180 秒；超时的图片显示占位，其余图片继续展示。",
+    "obvious_hint": true
+  },
+  "master_ttl_hours": {
+    "description": "数据更新间隔（小时）",
+    "type": "int",
+    "default": 6,
+    "hint": "主数据检查更新的间隔，范围 1–168 小时，默认 6 小时。更新失败时保留已有完整快照。"
+  },
+  "cache_mb": {
+    "description": "图片缓存上限（MB）",
+    "type": "int",
+    "default": 256,
+    "hint": "图片与成图的磁盘缓存上限，范围 64–2048 MB，默认 256 MB。主数据快照单独保存，不计入此上限。"
+  },
+  "font_path": {
+    "description": "自定义字体路径",
+    "type": "string",
+    "default": "",
+    "hint": "选填，填写支持中日文的字体文件绝对路径。留空优先使用插件内置 Noto CJK 字体；修改后保存并重载插件。"
+  },
+  "character_aliases": {
+    "description": "自定义角色别名",
+    "type": "text",
+    "default": "",
+    "hint": "每行填写 别名=角色ID，例如 小实=5。完整 26 位角色 ID 见 README 的“角色ID与自定义别名”章节，也可发送 /查卡角色 查看。修改后保存并重载插件。",
+    "obvious_hint": true
+  }
 }

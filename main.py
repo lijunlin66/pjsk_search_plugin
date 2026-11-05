@@ -39,7 +39,7 @@ class PjskPlugin(Star):
         await self.help_image("event")
         await self.help_image("card", True)
         await self.help_image("event", True)
-        logger.info("pjsk查询工具 1.2.2 已加载；主数据在后台准备")
+        logger.info("pjsk查询工具 1.2.3 已加载；主数据在后台准备")
 
     def status(self):
         stamp = datetime.fromtimestamp(
@@ -84,7 +84,7 @@ class PjskPlugin(Star):
                     return
                 detail = len(cards) == 1
                 cache_key = hashlib.sha256(
-                    f"v1.2.2-upload|{self.service.revision}|{self.service.master_base}|{self.service.asset_base}|{query}|{self.renderer.font_path}|{self.config.get('character_aliases', '')}".encode()
+                    f"v1.2.3-upload|{self.service.revision}|{self.service.master_base}|{self.service.asset_base}|{query}|{self.renderer.font_path}|{self.config.get('character_aliases', '')}".encode()
                 ).hexdigest()
                 path = self.service.render_dir / (cache_key + ".img")
                 complete = True
@@ -148,7 +148,7 @@ class PjskPlugin(Star):
 
     async def help_image(self, kind, failed=False):
         stamp = hashlib.sha256(
-            f"1.2.2|{self.renderer.font_path}|{kind}|{failed}".encode()
+            f"1.2.3|{self.renderer.font_path}|{kind}|{failed}".encode()
         ).hexdigest()
         path = self.service.root / f"guide-{stamp}.jpg"
         if path.exists():
@@ -192,7 +192,7 @@ class PjskPlugin(Star):
                 detail = query.isdigit()
                 revision = hashlib.sha256(repr(records).encode()).hexdigest()
                 key = hashlib.sha256(
-                    f"event-1.2.2-layout2|{revision}|{query}|{self.service.asset_base}|{self.renderer.font_path}".encode()
+                    f"event-1.2.3-layout2|{revision}|{query}|{self.service.asset_base}|{self.renderer.font_path}".encode()
                 ).hexdigest()
                 path = self.service.render_dir / (key + ".img")
                 if path.exists() and time.time() - path.stat().st_mtime < 21600:
