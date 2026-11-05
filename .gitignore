@@ -1,0 +1,12 @@
+__pycache__/
+.ruff_cache/
+.pytest_cache/
+*.pyc
+.venv/
+
+# Local tooling and generated artifacts
+.tools/
+.work/
+*.zip
+*.zip.sha256
+*.manifest.json
