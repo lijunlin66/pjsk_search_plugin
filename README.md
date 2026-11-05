@@ -1,0 +1,1 @@
+# pjsk_search_plugin
