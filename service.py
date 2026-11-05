@@ -77,7 +77,7 @@ class Service:
             follow_redirects=True,
             limits=httpx.Limits(max_connections=12, max_keepalive_connections=8),
             headers={
-                "User-Agent": "astrbot_plugin_pjsk/1.2.3",
+                "User-Agent": "astrbot_plugin_pjsk/1.3.0",
                 "Accept-Encoding": "gzip, deflate",
             },
         )
@@ -98,6 +98,9 @@ class Service:
         self.closed = False
         self.source_key = hashlib.sha256(self.master_base.encode()).hexdigest()[:12]
         self.snapshot = self.master_dir / f"snapshot-{self.source_key}.json"
+        from .live import LiveService
+
+        self.live = LiveService(self)
 
     async def start(self):
         if self.snapshot.exists():

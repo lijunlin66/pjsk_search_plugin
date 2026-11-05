@@ -48,5 +48,29 @@
     "default": "",
     "hint": "每行填写 别名=角色ID，例如 小实=5。完整 26 位角色 ID 见 README 的“角色ID与自定义别名”章节，也可发送 /查卡角色 查看。修改后保存并重载插件。",
     "obvious_hint": true
+  },
+  "cn_master_base": {
+    "description": "国服主数据地址",
+    "type": "string",
+    "default": "https://sekai-master-cdn.haruki.seiunx.com/haruki-sekai-sc-master/master",
+    "hint": "国服活动时间表及加成资料社区镜像，必须为 HTTPS。与日服主数据分开缓存。"
+  },
+  "cn_asset_base": {
+    "description": "国服图片地址",
+    "type": "string",
+    "default": "https://storage.exmeaning.com/sekai-cn-assets",
+    "hint": "国服横幅社区镜像。图片缺失时保留文字资料和占位图。"
+  },
+  "ranking_jp_base": {
+    "description": "日服榜线地址",
+    "type": "string",
+    "default": "https://rks-n.pjsk.moe/api/public/v2",
+    "hint": "Moesekai 公开榜线 API 根地址，需兼容 /jp/latest 响应结构，必须为 HTTPS；无需游戏账号。"
+  },
+  "ranking_cn_base": {
+    "description": "国服榜线地址",
+    "type": "string",
+    "default": "https://rks-n-cn.exmeaning.com/api/public/v2",
+    "hint": "Moesekai 公开榜线 API 根地址，需兼容 /cn/latest 响应结构，必须为 HTTPS；不保存玩家昵称或账号资料。"
   }
 }

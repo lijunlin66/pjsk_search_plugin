@@ -13,10 +13,13 @@ from astrbot.api.message_components import Image
 from astrbot.api.star import Context, Star
 from astrbot.core.utils.astrbot_path import get_astrbot_data_path
 
-from .activity_ui import atlas, dossier, guide
+from .activity_ui import atlas, dossier
 from .catalog import trained
 from .events import QueryError
-from .render import Renderer
+from .help_ui import GUIDE_REVISION, guide
+from .live import REGIONS
+from .live_ui import live_image
+from .render import Renderer, local_date
 from .service import DataUnavailable, Service, atomic_write
 from .transport import RETRY_BYTES, prepare_upload
 
@@ -35,11 +38,10 @@ class PjskPlugin(Star):
 
     async def initialize(self):
         await self.service.start()
-        await self.help_image("card")
-        await self.help_image("event")
+        await self.help_image("all")
         await self.help_image("card", True)
         await self.help_image("event", True)
-        logger.info("pjsk查询工具 1.2.3 已加载；主数据在后台准备")
+        logger.info("pjsk查询工具 1.3.0 已加载；主数据在后台准备")
 
     def status(self):
         stamp = datetime.fromtimestamp(
@@ -84,7 +86,7 @@ class PjskPlugin(Star):
                     return
                 detail = len(cards) == 1
                 cache_key = hashlib.sha256(
-                    f"v1.2.3-upload|{self.service.revision}|{self.service.master_base}|{self.service.asset_base}|{query}|{self.renderer.font_path}|{self.config.get('character_aliases', '')}".encode()
+                    f"v1.3.0-upload|{self.service.revision}|{self.service.master_base}|{self.service.asset_base}|{query}|{self.renderer.font_path}|{self.config.get('character_aliases', '')}".encode()
                 ).hexdigest()
                 path = self.service.render_dir / (cache_key + ".img")
                 complete = True
@@ -146,9 +148,17 @@ class PjskPlugin(Star):
         finally:
             self.busy = False
 
-    async def help_image(self, kind, failed=False):
+    @filter.command("pjsk查询帮助")
+    async def query_help(self, event: AstrMessageEvent):
+        """一张图片查看查卡、活动、当前活动与榜线的全部用法。"""
+        yield event.chain_result([Image.fromBytes(await self.help_image("all"))])
+
+    async def help_image(self, kind="all", failed=False):
+        # Normal help entrances share one pre-rendered local file.
+        if not failed:
+            kind = "all"
         stamp = hashlib.sha256(
-            f"1.2.3|{self.renderer.font_path}|{kind}|{failed}".encode()
+            f"{GUIDE_REVISION}|{self.renderer.font_path}|{kind}|{failed}".encode()
         ).hexdigest()
         path = self.service.root / f"guide-{stamp}.jpg"
         if path.exists():
@@ -192,7 +202,7 @@ class PjskPlugin(Star):
                 detail = query.isdigit()
                 revision = hashlib.sha256(repr(records).encode()).hexdigest()
                 key = hashlib.sha256(
-                    f"event-1.2.3-layout2|{revision}|{query}|{self.service.asset_base}|{self.renderer.font_path}".encode()
+                    f"event-1.3.0-layout2|{revision}|{query}|{self.service.asset_base}|{self.renderer.font_path}".encode()
                 ).hexdigest()
                 path = self.service.render_dir / (key + ".img")
                 if path.exists() and time.time() - path.stat().st_mtime < 21600:
@@ -223,6 +233,68 @@ class PjskPlugin(Star):
         except Exception as exc:  # noqa: BLE001 - isolate failures at the message boundary
             logger.exception(f"PJSK 活动查询失败：{type(exc).__name__}")
             yield event.plain_result("活动图片生成或发送失败，请稍后重试。")
+        finally:
+            self.busy = False
+
+    @filter.command("cn当前活动")
+    async def current_cn(self, event: AstrMessageEvent):
+        """查询国服正在进行的活动。"""
+        async for result in self.live_lookup(event, region="cn"):
+            yield result
+
+    @filter.command("jp当前活动")
+    async def current_jp(self, event: AstrMessageEvent):
+        """查询日服正在进行的活动。"""
+        async for result in self.live_lookup(event, region="jp"):
+            yield result
+
+    @filter.command("cn榜线")
+    async def borders_cn(self, event: AstrMessageEvent):
+        """查询国服当前活动综合榜线。"""
+        async for result in self.live_lookup(event, region="cn", borders=True):
+            yield result
+
+    @filter.command("jp榜线")
+    async def borders_jp(self, event: AstrMessageEvent):
+        """查询日服当前活动综合榜线。"""
+        async for result in self.live_lookup(event, region="jp", borders=True):
+            yield result
+
+    async def live_lookup(self, event, region, borders=False):
+        parts = event.get_message_str().strip().split(maxsplit=1)
+        query = parts[1] if len(parts) > 1 else ""
+        if query:
+            yield event.chain_result([Image.fromBytes(await self.help_image("all"))])
+            return
+        if self.busy:
+            yield event.plain_result("正在生成另一张图，请稍后重试。")
+            return
+        self.busy = True
+        try:
+            async with self.query_lock:
+                current = await self.service.live.current(region)
+                if not current["event"]:
+                    message = f"{REGIONS[region]}当前没有正在进行的活动。"
+                    if current.get("next"):
+                        following = current["next"]
+                        message += f"\n下期：{following['name']}（ID {following['id']}）\n开始：{local_date(following['startAt'])} UTC+8"
+                    yield event.plain_result(message)
+                    return
+                current = await (
+                    self.service.live.ranking(current)
+                    if borders
+                    else self.service.live.enrich(current)
+                )
+                banner = await self.service.live.banner(current)
+                data = await asyncio.to_thread(
+                    live_image, self.renderer, current, banner, borders
+                )
+                await self.deliver_image(event, data)
+        except DataUnavailable as exc:
+            yield event.plain_result(str(exc))
+        except Exception as exc:  # noqa: BLE001 - isolate failures at the message boundary
+            logger.exception(f"PJSK 当前活动查询失败：{type(exc).__name__}")
+            yield event.plain_result("当前活动或榜线查询失败，请稍后重试。")
         finally:
             self.busy = False
 

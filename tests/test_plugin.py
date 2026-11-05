@@ -346,6 +346,22 @@ class EntryTests(unittest.IsolatedAsyncioTestCase):
     async def test_normal_lookup_command(self):
         self.assertIn("共 2 张", (await self.run_event("查卡 mnr"))[1])
 
+    async def test_live_prefix_handlers_select_correct_server_and_mode(self):
+        seen = []
+
+        async def capture(event, region, borders=False):
+            seen.append((region, borders))
+            yield "ok"
+
+        self.plugin.live_lookup = capture
+        for name in ("current_cn", "current_jp", "borders_cn", "borders_jp"):
+            self.assertEqual(
+                [r async for r in getattr(self.plugin, name)(object())], ["ok"]
+            )
+        self.assertEqual(
+            seen, [("cn", False), ("jp", False), ("cn", True), ("jp", True)]
+        )
+
     async def test_upload_921_retries_once(self):
         output = io.BytesIO()
         Image.new("RGB", (32, 48), "blue").save(output, "JPEG")
@@ -386,6 +402,42 @@ class EntryTests(unittest.IsolatedAsyncioTestCase):
     async def test_help_without_parameters(self):
         self.plugin.help_image = AsyncMock(return_value=b"help-image")
         self.assertEqual((await self.run_event("pjsk"))[0], [b"help-image"])
+
+    async def test_unified_help_command_returns_one_image_without_loading_data(self):
+        self.plugin.help_image = AsyncMock(return_value=b"complete-guide")
+        event = types.SimpleNamespace(chain_result=lambda chain: chain)
+        self.assertEqual(
+            [r async for r in self.plugin.query_help(event)], [[b"complete-guide"]]
+        )
+        self.plugin.help_image.assert_awaited_once_with("all")
+        self.plugin.service.ensure.assert_not_awaited()
+
+    async def test_help_entrances_share_persistent_cache_and_failures_stay_distinct(
+        self,
+    ):
+        self.plugin.service.root = Path(self.temp.name)
+        with patch.object(self.main, "guide", return_value=b"cached-guide") as render:
+            for kind in ("all", "card", "event"):
+                self.assertEqual(await self.plugin.help_image(kind), b"cached-guide")
+            self.assertEqual(render.call_count, 1)
+            await self.plugin.help_image("card", True)
+            await self.plugin.help_image("event", True)
+            self.assertEqual(render.call_count, 3)
+            self.assertEqual(len(list(Path(self.temp.name).glob("guide-*.jpg"))), 3)
+        # Reading a warmed cache must work even when rendering is unavailable.
+        with patch.object(self.main, "guide", side_effect=RuntimeError("no render")):
+            self.assertEqual(await self.plugin.help_image("all"), b"cached-guide")
+
+    async def test_live_help_returns_unified_image_without_requesting_live_data(self):
+        self.plugin.help_image = AsyncMock(return_value=b"complete-guide")
+        event = types.SimpleNamespace(
+            get_message_str=lambda: "/cn榜线 帮助",
+            chain_result=lambda chain: chain,
+        )
+        self.assertEqual(
+            [r async for r in self.plugin.live_lookup(event, "cn", True)],
+            [[b"complete-guide"]],
+        )
 
     async def test_team_with_spaces_returns_all(self):
         self.assertIn(

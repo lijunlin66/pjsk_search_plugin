@@ -6,9 +6,10 @@ from pathlib import Path
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from astrbot_plugin_pjsk.activity_ui import atlas, dossier, guide
+from astrbot_plugin_pjsk.activity_ui import atlas, dossier
 from astrbot_plugin_pjsk.catalog import Catalog
 from astrbot_plugin_pjsk.events import EventIndex, QueryError
+from astrbot_plugin_pjsk.help_ui import guide
 from astrbot_plugin_pjsk.render import Renderer
 
 
