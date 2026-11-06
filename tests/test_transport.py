@@ -3,6 +3,7 @@ import random
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image
 
@@ -33,6 +34,26 @@ class UploadTests(unittest.TestCase):
         data = prepare_upload(output.getvalue(), 10000, 128)
         with Image.open(io.BytesIO(data)) as decoded:
             self.assertEqual(decoded.size, (32, 128))
+
+    def test_small_file_is_still_bounded_by_pixel_count(self):
+        output = io.BytesIO()
+        Image.new("RGB", (200, 1000), "white").save(output, "PNG")
+        data = prepare_upload(output.getvalue(), 100000, 16000, 50000)
+        with Image.open(io.BytesIO(data)) as image:
+            self.assertEqual(image.size, (100, 500))
+
+    def test_safe_bounded_image_avoids_decoding_and_copying(self):
+        output = io.BytesIO()
+        Image.new("RGB", (100, 200), "white").save(output, "JPEG")
+        with patch.object(
+            Image.Image,
+            "convert",
+            side_effect=AssertionError("unnecessary full decode"),
+        ):
+            self.assertEqual(
+                prepare_upload(output.getvalue(), 100000, 16000, 18_000_000),
+                output.getvalue(),
+            )
 
 
 if __name__ == "__main__":

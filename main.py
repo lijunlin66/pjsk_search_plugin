@@ -13,7 +13,7 @@ from astrbot.api.message_components import Image
 from astrbot.api.star import Context, Star
 from astrbot.core.utils.astrbot_path import get_astrbot_data_path
 
-from .activity_ui import atlas, dossier
+from .activity_ui import atlas, atlas_batches, dossier
 from .catalog import trained
 from .events import QueryError
 from .help_ui import GUIDE_REVISION, guide
@@ -21,7 +21,9 @@ from .live import REGIONS
 from .live_ui import live_image
 from .render import Renderer, local_date
 from .service import DataUnavailable, Service, atomic_write
-from .transport import RETRY_BYTES, prepare_upload
+from .song_ui import song_image
+from .songs import parse_chart
+from .transport import RETRY_BYTES, UPLOAD_BYTES, prepare_upload
 
 
 class PjskPlugin(Star):
@@ -41,7 +43,7 @@ class PjskPlugin(Star):
         await self.help_image("all")
         await self.help_image("card", True)
         await self.help_image("event", True)
-        logger.info("pjsk查询工具 1.3.0 已加载；主数据在后台准备")
+        logger.info("pjsk查询工具 1.4.4 已加载；主数据在后台准备")
 
     def status(self):
         stamp = datetime.fromtimestamp(
@@ -86,7 +88,7 @@ class PjskPlugin(Star):
                     return
                 detail = len(cards) == 1
                 cache_key = hashlib.sha256(
-                    f"v1.3.0-upload|{self.service.revision}|{self.service.master_base}|{self.service.asset_base}|{query}|{self.renderer.font_path}|{self.config.get('character_aliases', '')}".encode()
+                    f"v1.4.4-upload|{self.service.revision}|{self.service.master_base}|{self.service.asset_base}|{query}|{self.renderer.font_path}|{self.config.get('character_aliases', '')}".encode()
                 ).hexdigest()
                 path = self.service.render_dir / (cache_key + ".img")
                 complete = True
@@ -188,7 +190,7 @@ class PjskPlugin(Star):
         self.busy = True
         try:
             async with self.query_lock:
-                index = await self.service.activity_data()
+                index = await self.service.activity_data(detail=query.isdigit())
                 try:
                     records = await asyncio.to_thread(index.search, query)
                 except QueryError as exc:
@@ -200,27 +202,69 @@ class PjskPlugin(Star):
                     )
                     return
                 detail = query.isdigit()
-                revision = hashlib.sha256(repr(records).encode()).hexdigest()
-                key = hashlib.sha256(
-                    f"event-1.3.0-layout2|{revision}|{query}|{self.service.asset_base}|{self.renderer.font_path}".encode()
+                # Card records include large growth tables. Never stringify those
+                # just to name a list image: the existing core revision covers them.
+                signatures = [
+                    (
+                        record["event"],
+                        [card.get("id") for card in record["cards"]],
+                        sorted(record.get("attrs", [])),
+                        sorted(record.get("participants", [])),
+                        sorted(record.get("units", [])),
+                        record.get("teams", []),
+                        [
+                            {
+                                key: g.get(key)
+                                for key in ("id", "name", "startAt", "endAt")
+                            }
+                            for g in record.get("gachas", [])
+                        ],
+                    )
+                    for record in records
+                ]
+                revision = hashlib.sha256(
+                    (self.service.revision + repr(signatures)).encode()
                 ).hexdigest()
-                path = self.service.render_dir / (key + ".img")
-                if path.exists() and time.time() - path.stat().st_mtime < 21600:
-                    data = await asyncio.to_thread(path.read_bytes)
-                else:
-                    media = await self.service.activity_media(records, detail)
-                    if detail:
-                        data = await asyncio.to_thread(
-                            dossier, self.renderer, records[0], media, index.catalog
-                        )
+                batches = [records] if detail else atlas_batches(records)
+                paths = []
+                for i in range(len(batches)):
+                    key = hashlib.sha256(
+                        f"event-1.4.4-batch2-14mp|{revision}|{query}|{i}|{len(batches)}|{self.service.asset_base}|{self.renderer.font_path}".encode()
+                    ).hexdigest()
+                    paths.append(self.service.render_dir / (key + ".img"))
+                images = []
+                for i, (batch, path) in enumerate(zip(batches, paths)):
+                    if path.exists() and time.time() - path.stat().st_mtime < 21600:
+                        data = await asyncio.to_thread(path.read_bytes)
                     else:
-                        data = await asyncio.to_thread(
-                            atlas, self.renderer, records, media, index.catalog, query
-                        )
-                    if media and all(media.values()):
-                        await asyncio.to_thread(atomic_write, path, data)
-                await self.deliver_image(event, data)
-                if not detail:
+                        # Download and draw one bounded batch at a time.
+                        media = await self.service.activity_media(batch, detail)
+                        if detail:
+                            data = await asyncio.to_thread(
+                                dossier, self.renderer, batch[0], media, index.catalog
+                            )
+                        else:
+                            page = (
+                                (i + 1, len(batches), len(records))
+                                if len(batches) > 1
+                                else None
+                            )
+                            data = await asyncio.to_thread(
+                                atlas,
+                                self.renderer,
+                                batch,
+                                media,
+                                index.catalog,
+                                query,
+                                page,
+                                True,
+                            )
+                        if media and all(media.values()):
+                            await asyncio.to_thread(atomic_write, path, data)
+                        del media
+                    images.append(data)
+                await self.deliver_images(event, images, bounded=True)
+                if not detail and len(images) == 1:
                     yield event.plain_result(
                         f"共 {len(records)} 项，已合为一张图。详情：/查活动 {records[0]['event']['id']}"
                     )
@@ -299,19 +343,133 @@ class PjskPlugin(Star):
             self.busy = False
 
     async def deliver_image(self, event, data):
-        original_size = len(data)
-        data = await asyncio.to_thread(prepare_upload, data)
-        if len(data) != original_size:
-            logger.info(f"查卡上传图片压缩：{original_size} -> {len(data)} bytes")
+        return (await self.deliver_images(event, [data]))[0]
+
+    async def deliver_images(self, event, images, bounded=False):
+        if not 1 <= len(images) <= 3:
+            raise ValueError("图片数量必须在 1–3 之间")
+        budget = UPLOAD_BYTES // len(images)
+        prepared = []
+        for data in images:
+            prepared.append(
+                await asyncio.to_thread(
+                    prepare_upload,
+                    data,
+                    budget,
+                    16000 if bounded else None,
+                    18_000_000 if bounded else None,
+                )
+            )
+        logger.info(
+            f"PJSK 图片消息：{len(prepared)} 张，同一消息发送，共 {sum(map(len, prepared))} bytes"
+        )
         try:
-            await event.send(event.chain_result([Image.fromBytes(data)]))
+            await event.send(
+                event.chain_result([Image.fromBytes(data) for data in prepared])
+            )
         except Exception as exc:
+            # A timeout has unknown delivery status; retry only an explicit rejection.
             if "921" not in str(exc) and "highway upload" not in str(exc).lower():
                 raise
-            logger.warning("查卡图片上传被拒绝，保留完整长图并降低传输体积后重试一次")
-            data = await asyncio.to_thread(prepare_upload, data, RETRY_BYTES, 20000)
-            await event.send(event.chain_result([Image.fromBytes(data)]))
-        return data
+            logger.warning("PJSK 图片上传被拒绝，降低整条消息的体积后重试一次")
+            prepared = [
+                await asyncio.to_thread(
+                    prepare_upload,
+                    data,
+                    RETRY_BYTES // len(images),
+                    12000 if bounded else 20000,
+                    12_000_000 if bounded else None,
+                )
+                for data in images
+            ]
+            await event.send(
+                event.chain_result([Image.fromBytes(data) for data in prepared])
+            )
+        return prepared
+
+    @filter.command("song")
+    async def song_lookup(self, event: AstrMessageEvent):
+        """查询国服歌曲 ID、原名、译名或社区别名。"""
+        async for result in self.music_lookup(event):
+            yield result
+
+    @filter.command("谱面查询")
+    async def chart_lookup(self, event: AstrMessageEvent):
+        """国服谱面图片，默认 MASTER；支持 mas、ex 等难度缩写。"""
+        async for result in self.music_lookup(event, chart=True):
+            yield result
+
+    async def music_lookup(self, event, chart=False):
+        parts = event.get_message_str().strip().split(maxsplit=1)
+        query = parts[1].strip() if len(parts) > 1 else ""
+        if not query or query.lower() in {"help", "帮助"}:
+            yield event.chain_result([Image.fromBytes(await self.help_image("all"))])
+            return
+        if len(query) > 150:
+            yield event.plain_result("关键词过长，请使用歌曲名或歌曲 ID。")
+            return
+        if self.busy:
+            yield event.plain_result("正在生成另一张图，请稍后重试。")
+            return
+        self.busy = True
+        try:
+            async with self.query_lock:
+                difficulty = "master"
+                if chart:
+                    query, difficulty = parse_chart(query)
+                index, levels, stale = await self.service.songs.data()
+                matches, mode = await asyncio.to_thread(
+                    index.search, query, self.config.get("song_suggestion_count", 2)
+                )
+                if not matches:
+                    yield event.plain_result(
+                        "请输入有效的歌曲名字或 ID；暂时没有可匹配的国服歌曲。"
+                    )
+                    return
+                if chart and mode == "exact" and len(matches) == 1:
+                    level = next(
+                        (
+                            r
+                            for r in levels
+                            if r.get("musicId") == matches[0]["id"]
+                            and r.get("musicDifficulty") == difficulty
+                        ),
+                        None,
+                    )
+                    if not level:
+                        yield event.plain_result(
+                            f"国服暂无 {difficulty.upper()} 难度记录，或难度资料暂不可用。可用 /song {matches[0]['id']} 查看已收录难度。"
+                        )
+                        return
+                    data = await self.service.songs.chart(
+                        matches[0],
+                        difficulty,
+                        level["playLevel"],
+                        self.renderer.font_path,
+                    )
+                else:
+                    covers = await self.service.images(
+                        [self.service.songs.jacket(music) for music in matches]
+                    )
+                    data = await asyncio.to_thread(
+                        song_image,
+                        self.renderer,
+                        matches,
+                        index,
+                        levels,
+                        covers,
+                        mode,
+                        stale,
+                    )
+                await self.deliver_image(event, data)
+                await asyncio.to_thread(self.service.prune)
+        except DataUnavailable as exc:
+            yield event.plain_result(str(exc))
+        except Exception as exc:  # noqa: BLE001 - isolate at the message boundary
+            logger.exception(f"PJSK 歌曲查询失败：{type(exc).__name__}")
+            yield event.plain_result("歌曲或谱面图片生成/发送失败，请稍后重试。")
+        finally:
+            self.busy = False
 
     @filter.command("查卡角色", alias={"pjsk角色"})
     async def characters(self, event: AstrMessageEvent):

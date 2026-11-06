@@ -77,7 +77,7 @@ class Service:
             follow_redirects=True,
             limits=httpx.Limits(max_connections=12, max_keepalive_connections=8),
             headers={
-                "User-Agent": "astrbot_plugin_pjsk/1.3.0",
+                "User-Agent": "astrbot_plugin_pjsk/1.4.4",
                 "Accept-Encoding": "gzip, deflate",
             },
         )
@@ -101,6 +101,9 @@ class Service:
         from .live import LiveService
 
         self.live = LiveService(self)
+        from .songs import SongService
+
+        self.songs = SongService(self)
 
     async def start(self):
         if self.snapshot.exists():
@@ -264,7 +267,7 @@ class Service:
             "_related": links,
         }
 
-    async def activity_data(self):
+    async def activity_data(self, detail=False):
         from .events import EventIndex
 
         catalog = await self.ensure()
@@ -273,11 +276,10 @@ class Service:
             "eventCards",
             "eventDeckBonuses",
             "gameCharacterUnits",
-            "gachas",
-            "eventMusics",
-            "musics",
             "cheerfulCarnivalTeams",
         )
+        if detail:
+            names += ("gachas",)
         async with self.extra_lock:
             await self.load_extra_tables(names)
             tables = {n: self.extra_cache.get(n, (0, []))[1] for n in names}
@@ -445,7 +447,7 @@ class Service:
             await asyncio.gather(*tasks, return_exceptions=True)
 
     def prune(self):
-        limit = max(64, min(2048, int(self.config.get("cache_mb", 256)))) * 1024 * 1024
+        limit = max(64, min(8192, int(self.config.get("cache_mb", 2048)))) * 1024 * 1024
         files = []
         for directory in (self.asset_dir, self.render_dir):
             for path in directory.iterdir():

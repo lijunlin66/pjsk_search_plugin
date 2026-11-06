@@ -1,4 +1,4 @@
-"""Prepare complete images for QQ upload without cropping or splitting them."""
+"""Bound complete image payloads by bytes, dimensions and pixel count."""
 
 import io
 import math
@@ -9,13 +9,21 @@ UPLOAD_BYTES = 6 * 1024 * 1024
 RETRY_BYTES = 4 * 1024 * 1024
 
 
-def prepare_upload(data, max_bytes=UPLOAD_BYTES, max_side=None):
-    if len(data) <= max_bytes and max_side is None:
+def prepare_upload(data, max_bytes=UPLOAD_BYTES, max_side=None, max_pixels=None):
+    if len(data) <= max_bytes and max_side is None and max_pixels is None:
         return data
     with Image.open(io.BytesIO(data)) as source:
+        safe_side = max_side is None or max(source.size) <= max_side
+        safe_pixels = max_pixels is None or source.width * source.height <= max_pixels
+        if len(data) <= max_bytes and safe_side and safe_pixels:
+            return data
         image = source.convert("RGB")
-    if max_side and max(image.size) > max_side:
-        ratio = max_side / max(image.size)
+    ratio = min(
+        1,
+        max_side / max(image.size) if max_side else 1,
+        math.sqrt(max_pixels / (image.width * image.height)) if max_pixels else 1,
+    )
+    if ratio < 1:
         image = image.resize(
             (max(1, round(image.width * ratio)), max(1, round(image.height * ratio))),
             Image.Resampling.LANCZOS,

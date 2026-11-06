@@ -33,8 +33,8 @@
   "cache_mb": {
     "description": "图片缓存上限（MB）",
     "type": "int",
-    "default": 256,
-    "hint": "图片与成图的磁盘缓存上限，范围 64–2048 MB，默认 256 MB。主数据快照单独保存，不计入此上限。"
+    "default": 2048,
+    "hint": "图片与成图的磁盘缓存总上限，范围 64–8192 MB，默认 2048 MB（2 GiB）；包含谱面缓存。主数据单独保存，已有实例设置不自动覆盖。"
   },
   "font_path": {
     "description": "自定义字体路径",
@@ -72,5 +72,17 @@
     "type": "string",
     "default": "https://rks-n-cn.exmeaning.com/api/public/v2",
     "hint": "Moesekai 公开榜线 API 根地址，需兼容 /cn/latest 响应结构，必须为 HTTPS；不保存玩家昵称或账号资料。"
+  },
+  "song_suggestion_count": {
+    "description": "歌曲近似候选数量",
+    "type": "int",
+    "default": 2,
+    "hint": "无法精确匹配歌曲或存在别名冲突时的候选数量，范围 1–10，默认 2。"
+  },
+  "song_alias_url": {
+    "description": "歌曲别名数据地址",
+    "type": "string",
+    "default": "https://raw.githubusercontent.com/StarMoe-org/MoeSekai-Hub/main/data/music_alias/music_aliases.json",
+    "hint": "社区别名库，必须为 HTTPS；6 小时刷新，失败时保留缓存。只匹配国服已上线的歌曲 ID。"
   }
 }

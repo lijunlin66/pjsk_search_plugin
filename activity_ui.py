@@ -1,6 +1,8 @@
 """Activity atlas, dossier and reusable local instruction cards."""
 
 import math
+from bisect import bisect_left
+from itertools import pairwise
 
 from PIL import Image, ImageDraw
 
@@ -80,7 +82,31 @@ def event_tile(renderer, record, media, catalog, width=720):
     return canvas
 
 
-def atlas(renderer, records, media, catalog, query):
+def atlas_batches(records, target_height=14000):
+    """Split whole records into at most three contiguous, balanced batches."""
+    if not records:
+        return []
+    heights = [sum(card_height(r) + 18 for r in records[col::2]) for col in (0, 1)]
+    count = min(
+        3, len(records), max(1, math.ceil((250 + max(heights)) / target_height))
+    )
+    prefix = [0]
+    for record in records:
+        prefix.append(prefix[-1] + card_height(record) + 18)
+    cuts = [0]
+    for i in range(1, count):
+        target = prefix[-1] * i / count
+        pos = bisect_left(prefix, target)
+        candidates = [
+            max(cuts[-1] + 1, min(len(records) - (count - i), p))
+            for p in (pos - 1, pos)
+        ]
+        cuts.append(min(candidates, key=lambda p: abs(prefix[p] - target)))
+    cuts.append(len(records))
+    return [records[first:last] for first, last in pairwise(cuts)]
+
+
+def atlas(renderer, records, media, catalog, query, page=None, bounded=False):
     columns = [records[::2], records[1::2]]
     lengths = [sum(card_height(r) + 18 for r in col) for col in columns]
     content_height = max(lengths)
@@ -90,11 +116,19 @@ def atlas(renderer, records, media, catalog, query):
         header = renderer.background(width, 174)
         d = ImageDraw.Draw(header)
         renderer.text(d, (42, 25), "EVENT ARCHIVE  /  日服活动", 21, TEAL)
-        renderer.text(d, (42, 65), renderer.ellipsis(query or "全部活动", 1150, 32), 32)
+        title = query or "全部活动"
+        if page:
+            title += f" · 第 {page[0]}/{page[1]} 张"
+        renderer.text(d, (42, 65), renderer.ellipsis(title, 1400, 32), 32)
         renderer.text(
             d,
             (42, 118),
-            f"共 {len(records)} 项 · 各列最新在前 · /查活动 编号 查看详情",
+            (
+                f"本图 {len(records)} 项 / 全部 {page[2]} 项"
+                if page
+                else f"共 {len(records)} 项"
+            )
+            + " · 各列最新在前 · /查活动 编号 查看详情",
             21,
             GRAY,
         )
@@ -136,6 +170,26 @@ def atlas(renderer, records, media, catalog, query):
         )
         yield footer
 
+    if bounded:
+        ratio = min(1, math.sqrt(14_000_000 / (width * height)), 16000 / height)
+        output_width, output_height = (
+            max(1, int(width * ratio)),
+            max(1, int(height * ratio)),
+        )
+        canvas = Image.new("RGB", (output_width, output_height))
+        source_y, dest_y = 0, 0
+        for part in parts():
+            source_y += part.height
+            bottom = source_y * output_height // height
+            if bottom > dest_y:
+                canvas.paste(
+                    part.resize(
+                        (output_width, bottom - dest_y), Image.Resampling.LANCZOS
+                    ),
+                    (0, dest_y),
+                )
+            dest_y = bottom
+        return renderer.encode(canvas)
     if width * height > 48_000_000 or height > 65000:
         return renderer.encode_png_rows(width, height, parts())
     canvas = Image.new("RGB", (width, height))

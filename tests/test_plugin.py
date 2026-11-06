@@ -175,6 +175,28 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.service.snapshot.exists())
         self.assertEqual(len(self.service.catalog.cards), 3)
 
+    async def test_activity_list_skips_large_detail_tables(self):
+        self.service.ensure = AsyncMock(return_value=object())
+        self.service.extra_cache = {
+            name: (1, [{"id": 1}])
+            for name in (
+                "events",
+                "eventCards",
+                "eventDeckBonuses",
+                "gameCharacterUnits",
+                "cheerfulCarnivalTeams",
+                "gachas",
+            )
+        }
+        self.service.load_extra_tables = AsyncMock()
+        with patch("astrbot_plugin_pjsk.events.EventIndex", return_value=object()):
+            await self.service.activity_data()
+            names = self.service.load_extra_tables.await_args.args[0]
+            self.assertNotIn("gachas", names)
+            self.assertNotIn("musics", names)
+            await self.service.activity_data(detail=True)
+            self.assertIn("gachas", self.service.load_extra_tables.await_args.args[0])
+
     async def test_refresh_keeps_metadata_until_reader_releases_lock(self):
         t = tables()
         self.mock(lambda r: httpx.Response(200, json=t[r.url.path.split("/")[-1][:-5]]))
@@ -402,6 +424,84 @@ class EntryTests(unittest.IsolatedAsyncioTestCase):
     async def test_help_without_parameters(self):
         self.plugin.help_image = AsyncMock(return_value=b"help-image")
         self.assertEqual((await self.run_event("pjsk"))[0], [b"help-image"])
+
+    async def test_full_event_list_uses_one_message_with_three_images(self):
+        records = [{"event": {"id": i}, "cards": [{}] * 5} for i in range(223)]
+        self.plugin.service.activity_data = AsyncMock(
+            return_value=types.SimpleNamespace(
+                search=lambda _: records, catalog=object()
+            )
+        )
+        self.plugin.service.activity_media = AsyncMock(return_value={})
+        output = io.BytesIO()
+        Image.new("RGB", (60, 100), "white").save(output, "PNG")
+        event = types.SimpleNamespace(
+            get_message_str=lambda: "/活动列表",
+            chain_result=lambda chain: chain,
+            plain_result=lambda text: text,
+            send=AsyncMock(),
+        )
+        with patch.object(self.main, "atlas", return_value=output.getvalue()) as render:
+            replies = [r async for r in self.plugin.activities(event)]
+        self.assertEqual(replies, [])
+        event.send.assert_awaited_once()
+        self.assertEqual(len(event.send.await_args.args[0]), 3)
+        self.assertEqual(
+            [r["event"]["id"] for call in render.call_args_list for r in call.args[1]],
+            list(range(223)),
+        )
+        self.assertFalse(self.plugin.busy)
+
+    async def test_multi_image_timeout_is_not_retried(self):
+        output = io.BytesIO()
+        Image.new("RGB", (60, 100), "white").save(output, "PNG")
+        event = types.SimpleNamespace(
+            chain_result=lambda chain: chain,
+            send=AsyncMock(side_effect=RuntimeError("WebSocket API call timeout")),
+        )
+        with self.assertRaisesRegex(RuntimeError, "timeout"):
+            await self.plugin.deliver_images(
+                event, [output.getvalue()] * 3, bounded=True
+            )
+        event.send.assert_awaited_once()
+
+    async def test_multi_image_rejection_retries_whole_chain_once(self):
+        output = io.BytesIO()
+        Image.new("RGB", (60, 100), "white").save(output, "PNG")
+        event = types.SimpleNamespace(
+            chain_result=lambda chain: chain,
+            send=AsyncMock(
+                side_effect=[RuntimeError("highway upload error_code=921"), None]
+            ),
+        )
+        await self.plugin.deliver_images(event, [output.getvalue()] * 3, bounded=True)
+        self.assertEqual(event.send.await_count, 2)
+        self.assertTrue(
+            all(len(call.args[0]) == 3 for call in event.send.await_args_list)
+        )
+
+    async def test_chart_short_name_sends_only_image_and_releases_busy(self):
+        song = {"id": 1, "title": "test"}
+        index = types.SimpleNamespace(search=Mock(return_value=([song], "exact")))
+        self.plugin.renderer.font_path = "font"
+        self.plugin.service.songs = types.SimpleNamespace(
+            data=AsyncMock(
+                return_value=(
+                    index,
+                    [{"musicId": 1, "musicDifficulty": "expert", "playLevel": 22}],
+                    False,
+                )
+            ),
+            chart=AsyncMock(return_value=b"chart-image"),
+        )
+        self.plugin.deliver_image = AsyncMock()
+        event = types.SimpleNamespace(get_message_str=lambda: "/谱面查询 1 ex")
+        self.assertEqual([r async for r in self.plugin.chart_lookup(event)], [])
+        self.plugin.deliver_image.assert_awaited_once_with(event, b"chart-image")
+        self.plugin.service.songs.chart.assert_awaited_once_with(
+            song, "expert", 22, "font"
+        )
+        self.assertFalse(self.plugin.busy)
 
     async def test_unified_help_command_returns_one_image_without_loading_data(self):
         self.plugin.help_image = AsyncMock(return_value=b"complete-guide")

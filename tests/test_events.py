@@ -2,11 +2,12 @@ import io
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from astrbot_plugin_pjsk.activity_ui import atlas, dossier
+from astrbot_plugin_pjsk.activity_ui import atlas, atlas_batches, dossier
 from astrbot_plugin_pjsk.catalog import Catalog
 from astrbot_plugin_pjsk.events import EventIndex, QueryError
 from astrbot_plugin_pjsk.help_ui import guide
@@ -114,6 +115,53 @@ class ActivityTests(unittest.TestCase):
     def test_unknown_condition_is_not_ignored(self):
         with self.assertRaises(QueryError):
             self.index.search("mnr invalid-filter")
+
+    def test_batches_cover_all_records_once_without_cutting_events(self):
+        records = [
+            dict(
+                self.index.records[0],
+                event={"id": i},
+                cards=[{}] * (26 if i % 17 == 0 else 5),
+            )
+            for i in range(223)
+        ]
+        batches = atlas_batches(records)
+        self.assertEqual(len(batches), 3)
+        self.assertEqual(
+            [r["event"]["id"] for batch in batches for r in batch], list(range(223))
+        )
+        self.assertTrue(all(batches))
+        self.assertEqual(len(atlas_batches(self.index.records)), 1)
+        self.assertEqual(len(atlas_batches(records[:70])), 2)
+
+    def test_bounded_atlas_does_not_allocate_an_oversized_canvas(self):
+        import astrbot_plugin_pjsk.activity_ui as ui
+
+        record = self.index.records[0]
+        renderer = Renderer()
+        original_new = Image.new
+        with (
+            patch.object(Image, "new", wraps=original_new) as allocate,
+            patch.object(
+                ui,
+                "event_tile",
+                side_effect=lambda *args: original_new(
+                    "RGB", (720, ui.card_height(record)), "white"
+                ),
+            ),
+        ):
+            data = atlas(
+                renderer, [record] * 223, {}, self.catalog, "测试", bounded=True
+            )
+        self.assertTrue(
+            all(
+                call.args[1][0] * call.args[1][1] <= 14_000_000
+                for call in allocate.call_args_list
+            )
+        )
+        with Image.open(io.BytesIO(data)) as image:
+            self.assertLessEqual(image.width * image.height, 14_000_000)
+            self.assertLessEqual(max(image.size), 16000)
 
     def test_images_are_valid_and_have_content(self):
         renderer = Renderer()
