@@ -4,9 +4,9 @@ import math
 
 from PIL import ImageDraw
 
+from ..services.songs import DIFFICULTIES
 from .help_ui import text
 from .render import GRAY, local_date
-from .songs import DIFFICULTIES
 
 
 def alias_layout(renderer, aliases, width=1128):

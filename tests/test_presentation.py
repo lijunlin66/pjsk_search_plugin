@@ -7,8 +7,12 @@ from pathlib import Path
 from unittest.mock import AsyncMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from astrbot_plugin_pjsk.presentation import compact_table, related, variants
-from astrbot_plugin_pjsk.service import DataUnavailable, Service, validate_table
+from astrbot_plugin_pjsk.domain.presentation import compact_table, related, variants
+from astrbot_plugin_pjsk.services.service import (
+    DataUnavailable,
+    Service,
+    validate_table,
+)
 
 
 class RelatedTests(unittest.TestCase):

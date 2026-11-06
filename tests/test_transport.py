@@ -8,7 +8,7 @@ from unittest.mock import patch
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from astrbot_plugin_pjsk.transport import prepare_upload
+from astrbot_plugin_pjsk.services.transport import prepare_upload
 
 
 class UploadTests(unittest.TestCase):

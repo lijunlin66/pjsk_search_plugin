@@ -8,8 +8,8 @@ from urllib.parse import urlparse
 
 import httpx
 
-from .catalog import ATTRS, NAMES
-from .presentation import compact_table
+from ..domain.catalog import ATTRS, NAMES
+from ..domain.presentation import compact_table
 from .service import DataUnavailable, atomic_write
 
 REGIONS = {"jp": "日服", "cn": "国服"}

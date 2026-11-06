@@ -10,8 +10,8 @@ from pathlib import Path
 import httpx
 from PIL import Image
 
-from .catalog import Catalog, trained, trained_only
-from .presentation import compact_table, related, variants
+from ..domain.catalog import Catalog, trained, trained_only
+from ..domain.presentation import compact_table, related, variants
 
 
 class DataUnavailable(Exception):
@@ -77,7 +77,7 @@ class Service:
             follow_redirects=True,
             limits=httpx.Limits(max_connections=12, max_keepalive_connections=8),
             headers={
-                "User-Agent": "astrbot_plugin_pjsk/1.4.4",
+                "User-Agent": "astrbot_plugin_pjsk/1.5.0",
                 "Accept-Encoding": "gzip, deflate",
             },
         )
@@ -268,7 +268,7 @@ class Service:
         }
 
     async def activity_data(self, detail=False):
-        from .events import EventIndex
+        from ..domain.events import EventIndex
 
         catalog = await self.ensure()
         names = (

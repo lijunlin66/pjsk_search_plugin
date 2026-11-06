@@ -15,9 +15,18 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
-from astrbot_plugin_pjsk.catalog import Catalog, skill_text, trained, trained_only
-from astrbot_plugin_pjsk.render import Renderer
-from astrbot_plugin_pjsk.service import DataUnavailable, Service, validate_table
+from astrbot_plugin_pjsk.domain.catalog import (
+    Catalog,
+    skill_text,
+    trained,
+    trained_only,
+)
+from astrbot_plugin_pjsk.rendering.render import Renderer
+from astrbot_plugin_pjsk.services.service import (
+    DataUnavailable,
+    Service,
+    validate_table,
+)
 
 
 def tables():
@@ -189,7 +198,9 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
             )
         }
         self.service.load_extra_tables = AsyncMock()
-        with patch("astrbot_plugin_pjsk.events.EventIndex", return_value=object()):
+        with patch(
+            "astrbot_plugin_pjsk.domain.events.EventIndex", return_value=object()
+        ):
             await self.service.activity_data()
             names = self.service.load_extra_tables.await_args.args[0]
             self.assertNotIn("gachas", names)
@@ -203,13 +214,15 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
         self.service.extra_cache["events"] = (1, [{"id": 1}])
         written = asyncio.Event()
         loop = asyncio.get_running_loop()
-        from astrbot_plugin_pjsk.service import atomic_write
+        from astrbot_plugin_pjsk.services.service import atomic_write
 
         def save(path, data):
             atomic_write(path, data)
             loop.call_soon_threadsafe(written.set)
 
-        with patch("astrbot_plugin_pjsk.service.atomic_write", side_effect=save):
+        with patch(
+            "astrbot_plugin_pjsk.services.service.atomic_write", side_effect=save
+        ):
             async with self.service.extra_lock:
                 task = asyncio.create_task(self.service.refresh())
                 await asyncio.wait_for(written.wait(), 3)

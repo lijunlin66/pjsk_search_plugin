@@ -13,17 +13,17 @@ from astrbot.api.message_components import Image
 from astrbot.api.star import Context, Star
 from astrbot.core.utils.astrbot_path import get_astrbot_data_path
 
-from .activity_ui import atlas, atlas_batches, dossier
-from .catalog import trained
-from .events import QueryError
-from .help_ui import GUIDE_REVISION, guide
-from .live import REGIONS
-from .live_ui import live_image
-from .render import Renderer, local_date
-from .service import DataUnavailable, Service, atomic_write
-from .song_ui import song_image
-from .songs import parse_chart
-from .transport import RETRY_BYTES, UPLOAD_BYTES, prepare_upload
+from .domain.catalog import trained
+from .domain.events import QueryError
+from .rendering.activity_ui import atlas, atlas_batches, dossier
+from .rendering.help_ui import GUIDE_REVISION, guide
+from .rendering.live_ui import live_image
+from .rendering.render import Renderer, local_date
+from .rendering.song_ui import song_image
+from .services.live import REGIONS
+from .services.service import DataUnavailable, Service, atomic_write
+from .services.songs import parse_chart
+from .services.transport import RETRY_BYTES, UPLOAD_BYTES, prepare_upload
 
 
 class PjskPlugin(Star):
@@ -43,7 +43,7 @@ class PjskPlugin(Star):
         await self.help_image("all")
         await self.help_image("card", True)
         await self.help_image("event", True)
-        logger.info("pjsk查询工具 1.4.4 已加载；主数据在后台准备")
+        logger.info("pjsk查询工具 1.5.0 已加载；主数据在后台准备")
 
     def status(self):
         stamp = datetime.fromtimestamp(
@@ -88,7 +88,7 @@ class PjskPlugin(Star):
                     return
                 detail = len(cards) == 1
                 cache_key = hashlib.sha256(
-                    f"v1.4.4-upload|{self.service.revision}|{self.service.master_base}|{self.service.asset_base}|{query}|{self.renderer.font_path}|{self.config.get('character_aliases', '')}".encode()
+                    f"v1.5.0-upload|{self.service.revision}|{self.service.master_base}|{self.service.asset_base}|{query}|{self.renderer.font_path}|{self.config.get('character_aliases', '')}".encode()
                 ).hexdigest()
                 path = self.service.render_dir / (cache_key + ".img")
                 complete = True
@@ -229,7 +229,7 @@ class PjskPlugin(Star):
                 paths = []
                 for i in range(len(batches)):
                     key = hashlib.sha256(
-                        f"event-1.4.4-batch2-14mp|{revision}|{query}|{i}|{len(batches)}|{self.service.asset_base}|{self.renderer.font_path}".encode()
+                        f"event-1.5.0-batch2-14mp|{revision}|{query}|{i}|{len(batches)}|{self.service.asset_base}|{self.renderer.font_path}".encode()
                     ).hexdigest()
                     paths.append(self.service.render_dir / (key + ".img"))
                 images = []
@@ -474,7 +474,7 @@ class PjskPlugin(Star):
     @filter.command("查卡角色", alias={"pjsk角色"})
     async def characters(self, event: AstrMessageEvent):
         """列出角色、ID和内置别名。"""
-        from .catalog import NAMES, UNITS
+        from .domain.catalog import NAMES, UNITS
 
         lines = ["角色ID用于配置自定义别名；查卡请使用名字，纯数字表示卡片ID。"]
         lines.extend(f"{cid}: {names}" for cid, names in NAMES.items())

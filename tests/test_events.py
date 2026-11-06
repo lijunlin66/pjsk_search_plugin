@@ -7,11 +7,11 @@ from unittest.mock import patch
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from astrbot_plugin_pjsk.activity_ui import atlas, atlas_batches, dossier
-from astrbot_plugin_pjsk.catalog import Catalog
-from astrbot_plugin_pjsk.events import EventIndex, QueryError
-from astrbot_plugin_pjsk.help_ui import guide
-from astrbot_plugin_pjsk.render import Renderer
+from astrbot_plugin_pjsk.domain.catalog import Catalog
+from astrbot_plugin_pjsk.domain.events import EventIndex, QueryError
+from astrbot_plugin_pjsk.rendering.activity_ui import atlas, atlas_batches, dossier
+from astrbot_plugin_pjsk.rendering.help_ui import guide
+from astrbot_plugin_pjsk.rendering.render import Renderer
 
 
 class ActivityTests(unittest.TestCase):
@@ -135,7 +135,7 @@ class ActivityTests(unittest.TestCase):
         self.assertEqual(len(atlas_batches(records[:70])), 2)
 
     def test_bounded_atlas_does_not_allocate_an_oversized_canvas(self):
-        import astrbot_plugin_pjsk.activity_ui as ui
+        import astrbot_plugin_pjsk.rendering.activity_ui as ui
 
         record = self.index.records[0]
         renderer = Renderer()

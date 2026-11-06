@@ -7,3 +7,5 @@ They remain copyright of the respective Project SEKAI rights holders, including 
 No upstream program code is included. Skill badges and the geometric background are drawn locally by this plugin.
 
 The root logo.png uses the maintainer-supplied Project SEKAI character image, resized without redrawing to 256×256 PNG. The original character artwork remains with its respective rights holders; it is not covered by the plugin code MIT license.
+
+Bundled UI images are stored in images/. The Noto CJK font and its SIL OFL license are stored together in fonts/. The plugin icon stays at ../logo.png for AstrBot discovery.

@@ -1,1 +1,1 @@
-"""PJSK card lookup for AstrBot."""
+"""AstrBot PJSK query plugin; the Star entry point is main.py."""

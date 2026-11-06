@@ -12,15 +12,15 @@ import httpx
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from astrbot_plugin_pjsk.live import (
+from astrbot_plugin_pjsk.rendering.live_ui import live_image
+from astrbot_plugin_pjsk.rendering.render import Renderer
+from astrbot_plugin_pjsk.services.live import (
     LiveService,
     active_event,
     normalize_ranking,
     validate_ranking,
 )
-from astrbot_plugin_pjsk.live_ui import live_image
-from astrbot_plugin_pjsk.render import Renderer
-from astrbot_plugin_pjsk.service import DataUnavailable
+from astrbot_plugin_pjsk.services.service import DataUnavailable
 
 
 def event(now):

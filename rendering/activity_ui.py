@@ -6,8 +6,8 @@ from itertools import pairwise
 
 from PIL import Image, ImageDraw
 
-from .catalog import ATTRS, NAMES
-from .events import TYPES
+from ..domain.catalog import ATTRS, NAMES
+from ..domain.events import TYPES
 from .render import GRAY, INK, TEAL, local_date
 
 

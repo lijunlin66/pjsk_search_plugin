@@ -5,9 +5,9 @@ import time
 
 from PIL import ImageDraw
 
-from .catalog import ATTRS, NAMES
-from .events import TYPES
-from .live import REGIONS, TIERS
+from ..domain.catalog import ATTRS, NAMES
+from ..domain.events import TYPES
+from ..services.live import REGIONS, TIERS
 from .render import GRAY, INK, local_date
 
 

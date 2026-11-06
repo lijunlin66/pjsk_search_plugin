@@ -2,18 +2,20 @@
 
 ## 模块职责
 
-| 文件 | 职责 |
+| 路径 | 职责 |
 | --- | --- |
-| main.py | AstrBot 命令、权限、生命周期、发送及失败提示 |
-| catalog.py | 数据索引、别名、已实装过滤、技能参数解析 |
-| presentation.py | 综合力、培养记录、关联资料与显示字段 |
-| service.py | HTTP 客户端、下载合并、并发、快照与磁盘缓存 |
-| render.py | 图鉴和详情排版、长图编码 |
-| help_ui.py | 统一查询帮助内容、两列表格排版、粗体小标题与帮助图版本 |
-| transport.py | 发送体积控制、上传错误识别、完整等比降级 |
-| live.py / live_ui.py | 两服当前活动、公开榜线缓存与时间核验、实时查询图片 |
-| events.py / activity_ui.py | 活动关联索引、多条件筛选、图鉴、详情与图片指引 |
-| tests/ | 核心数据、缓存、指令、绘图和上传边界回归测试 |
+| main.py | 唯一 AstrBot Star 入口、命令、权限、生命周期与消息发送 |
+| domain/catalog.py | 卡片索引、角色别名、已实装过滤、技能参数 |
+| domain/events.py | 活动关联及组合筛选 |
+| domain/presentation.py | 综合力、培养记录与资料投影 |
+| services/service.py | HTTP 客户端、快照、下载与磁盘缓存 |
+| services/live.py / songs.py | 两服当前活动/榜线、国服歌曲与谱面 |
+| services/transport.py | 图片消息的尺寸、像素及体积控制 |
+| rendering/render.py | 共用字体/资源加载、卡面绘图与长图编码 |
+| rendering/*_ui.py | 活动、实时信息、歌曲和统一帮助布局 |
+| assets/images/、assets/fonts/ | 只读图片、字体与许可证 |
+| docs/ | 维护文档 |
+| tests/ | 离线回归用例 |
 
 综合力公式只在 presentation 中维护。增加字段时先补显示层，再接入绘图，避免恢复一套重复的文字详情实现。扩展数据进入缓存前精简；未使用的整张大表不要下载。
 
@@ -29,7 +31,7 @@ python -m ruff format --check .
 
 测试使用模拟发送边界，不向 QQ 发送消息。修改技能和综合力公式时，用相同主数据比较修改前后的所有卡片；修改 UI 时目视检查普通卡、生日卡、仅花后卡、长标题及完整团队长图。
 
-发布时同步 metadata.yaml、main.py 成图缓存版本、service.py User-Agent 和 CHANGELOG.md。安装包只收录源码、配置模板、依赖、测试、文档、必要素材及许可证，不包含配置实值、账号、密钥、游戏数据快照和研究脚本。工作区构建工具位于 `maintenance/pjsk/`，不属于运行依赖。
+发布时同步 metadata.yaml、main.py 成图缓存版本、services/service.py User-Agent 和 CHANGELOG.md。安装包只收录源码、配置模板、依赖、测试、文档、必要素材及许可证，不包含配置实值、账号、密钥、游戏数据快照和研究脚本。工作区构建工具位于 `maintenance/pjsk/`，不属于运行依赖。
 
 ## AstrBot 边界
 
@@ -69,7 +71,7 @@ python -m ruff format --check .
 
 唯一源码仓库为 https://github.com/lijunlin66/pjsk_search_plugin，维护分支为 main，作者和维护者为 lijunlin66。保留初始化提交，常规提交后推送；更新前先核对远端分支，不强制推送覆盖历史。
 
-源码根目录即 AstrBot 插件目录。保留 main.py、metadata.yaml、_conf_schema.json、requirements.txt、logo.png、运行模块、必要 assets/fonts 及许可证；测试和维护文档一同入库。不提交实例配置、主数据快照、成图、开发环境、私钥或安装包副本。图标使用维护者提供的正方形原图等比缩放，256×256 RGB PNG，无重新绘制；其角色图像权利不由本插件的 MIT 许可授予。
+源码根目录即 AstrBot 插件目录。保留根目录 main.py、metadata.yaml、_conf_schema.json、requirements.txt、logo.png，以及 domain/services/rendering 子包、必要 assets/images、assets/fonts 及许可证；测试和维护文档一同入库。不提交实例配置、主数据快照、成图、开发环境、私钥或安装包副本。图标使用维护者提供的正方形原图等比缩放，256×256 RGB PNG，无重新绘制；其角色图像权利不由本插件的 MIT 许可授予。
 
 克隆时使用 README 中的 astrbot_plugin_pjsk 目录名，以便独立回归测试导入模块。修改后执行现有 unittest、Ruff 检查和格式检查；从相同提交构建发布包，再核对元数据、图标与逐文件摘要。仅更换图标和文档时不新增业务测试。确认 GitHub main 指向预期提交后，才清理临时文件；保留上一稳定版及服务器源码备份。
 
@@ -116,3 +118,11 @@ verify_activity_delivery.py 不调用 initialize/Service.start，只加载流式
 ### 1.4.4 默认缓存与清理
 
 配置模板与缺省回退值统一为 2048 MB（2 GiB），最大值仍为 8192 MB。不得以升级默认值为由覆盖现有实例设置。本次仅推送仓库，运行服务器保持现有代码、配置与进程。移除重复的别名高度元组字段、冗余数据源临时变量，以及维护工作区中已不适用的旧活动验证脚本。按维护者要求不新增或执行测试，仅完成打包所需的配置/语法/文件完整性校验。
+
+## 目录维护（1.5.0）
+
+只有 main.py 定义 Star 与官方命令装饰器；子包 __init__.py 不导入入口或注册处理器。domain 只包含纯数据逻辑；services 管理外部数据及缓存；rendering 负责绘制，通过包内相对导入引用其他层。可选服务的延迟导入继续位于 Service.__init__，避免初始化时的循环导入。
+
+资源统一通过 rendering/render.py 的 ASSET_ROOT（插件目录/assets）定位，与进程工作目录无关。logo.png 仍在根目录供 AstrBot 发现，字体许可证随字体放入 assets/fonts。构建工具只纳入根目录识别文件和明确的子目录，不打包本机配置、缓存或运维凭据。
+
+从旧扁平目录升级时，Git 提交包含旧文件删除与新文件新增，不保留兼容转发文件或重复字体。手动覆盖安装需替换完整源码目录（先备份），仅保留 AstrBot 外部配置及 plugin_data；专用部署工具按迁移清单清理旧源码文件。此项是源码布局迁移，不改变数据目录或配置键。

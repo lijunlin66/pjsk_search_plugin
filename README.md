@@ -2,7 +2,7 @@
 
 <img src="logo.png" width="128" height="128" alt="pjsk查询工具图标">
 
-适用于 AstrBot 4.29.1–4.x 的世界计划日服卡面与活动图鉴插件，支持国服/日服当前活动和榜线查询。插件标识为 `astrbot_plugin_pjsk`，展示名为 **pjsk查询工具**。作者：lijunlin66，版本：1.4.4。
+适用于 AstrBot 4.29.1–4.x 的世界计划日服卡面与活动图鉴插件，支持国服/日服当前活动和榜线查询。插件标识为 `astrbot_plugin_pjsk`，展示名为 **pjsk查询工具**。作者：lijunlin66，版本：1.5.0。
 
 ## 数据来源
 
@@ -21,11 +21,38 @@
 https://github.com/lijunlin66/pjsk_search_plugin
 ```
 
-也可上传 `astrbot_plugin_pjsk-1.4.4.zip`，然后启用。也可将此目录放入 `AstrBot/data/plugins/astrbot_plugin_pjsk` 后重载。依赖由 `requirements.txt` 声明：HTTPX、Pillow。Python 需 3.10 或以上，以所用 AstrBot 版本的 Python 要求为准。
+也可上传 `astrbot_plugin_pjsk-1.5.0.zip`，然后启用。也可将此目录放入 `AstrBot/data/plugins/astrbot_plugin_pjsk` 后重载。依赖由 `requirements.txt` 声明：HTTPX、Pillow、pjsekai-scores-rs。Python 需 3.10 或以上，以所用 AstrBot 版本的 Python 要求为准。
 
 默认无需密钥、游戏账号、浏览器或额外渲染服务。附带 Noto CJK 中日文字体及 OFL 许可证，Linux 容器也可直接绘图。需能访问 `sekai-world.github.io` 与 `storage.sekai.best`。当前声明和验证目标为 OneBot v11（`aiocqhttp`）；其他平台未做实际适配器验证。
 
 源码仓库：[lijunlin66/pjsk_search_plugin](https://github.com/lijunlin66/pjsk_search_plugin)，默认分支 `main`。`metadata.yaml` 已填写实际仓库地址，可通过仓库链接安装；尚未提交 AstrBot 插件市场。插件图标由维护者提供，按官方建议缩放为 256×256 PNG，保留原图内容。
+
+## 目录结构
+
+```text
+astrbot_plugin_pjsk/
+├── main.py                 # AstrBot Star 类、指令、生命周期
+├── metadata.yaml           # 插件识别与版本
+├── _conf_schema.json       # WebUI 配置模板
+├── requirements.txt        # 运行依赖
+├── logo.png                # 插件图标
+├── domain/                 # 角色/卡片索引、活动筛选、资料计算
+├── services/               # 异步数据源、缓存、歌曲/榜线、发送准备
+├── rendering/              # 卡面、活动、歌曲、帮助图绘制
+├── assets/
+│   ├── images/             # 卡框、属性和稀有度图标
+│   ├── fonts/              # 字体及 OFL 许可证
+│   └── SOURCES.md          # 素材来源与权利说明
+├── docs/MAINTENANCE.md      # 维护、升级及排障说明
+├── tests/                  # 离线回归用例
+├── README.md
+├── CHANGELOG.md
+└── LICENSE
+```
+
+按职责划分内部目录是本插件的组织方式；[AstrBot 官方规范](https://docs.astrbot.app/dev/star/guides/simple.html)要求的 `main.py` 入口、Star 类及其指令处理器继续保留在根目录。元数据、配置模板、依赖声明和图标也保留原位置。内部使用相对导入，不修改解释器路径；资源路径按模块位置定位，支持从不同工作目录加载。
+
+下载文件、主数据、帮助与成图仍写入 `data/plugin_data/astrbot_plugin_pjsk/`，符合[官方大文件存储规范](https://docs.astrbot.app/dev/star/guides/storage.html)，不随源码目录搬迁，不改已有实例配置。
 
 ## 指令
 
@@ -233,9 +260,9 @@ python -m ruff format --check .
 
 已验证环境：AstrBot 4.29.1、Python 3.12.15、HTTPX 0.28.1、Pillow 13.0.0。2026-11-01 快照共 1,472 张卡；实乃里 54 张、MMJ 271 张均完成单张长图生成。实际 QQ 日志已确认 MMJ 上传失败后的降级重试成功。数据会继续增长，网络与平台状态会影响延迟。
 
-维护方法见 [MAINTENANCE.md](MAINTENANCE.md)，版本变更见 [CHANGELOG.md](CHANGELOG.md)。
+维护方法见 [维护指南](docs/MAINTENANCE.md)，版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
-代码采用 MIT 许可证；附带字体采用 SIL OFL，见 `fonts/OFL.txt`。图标、游戏数据与卡图版权属于 SEGA、Colorful Palette、Crypton 等权利人；代码许可不覆盖游戏素材。随插件的游戏 UI 素材来源见 `assets/SOURCES.md`。
+代码采用 MIT 许可证；附带字体采用 SIL OFL，见 `assets/fonts/OFL.txt`。图标、游戏数据与卡图版权属于 SEGA、Colorful Palette、Crypton 等权利人；代码许可不覆盖游戏素材。随插件的游戏 UI 素材来源见 `assets/SOURCES.md`。
 
 默认别名库原始地址连接失败时自动使用同仓库的 jsDelivr CDN 镜像，两线路分别缓存；自定义 song_alias_url 只使用指定地址。
 

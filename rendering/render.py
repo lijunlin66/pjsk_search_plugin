@@ -10,14 +10,22 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-from .catalog import (
+from ..domain.catalog import (
     ATTRS,
     rarity,
     readable,
     skill_text,
     trained_only,
 )
-from .presentation import SUPPLIES, max_power, power_growth, skill_badge, variants
+from ..domain.presentation import (
+    SUPPLIES,
+    max_power,
+    power_growth,
+    skill_badge,
+    variants,
+)
+
+ASSET_ROOT = Path(__file__).resolve().parents[1] / "assets"
 
 INK, GRAY, TEAL, LINE = "#161a20", "#646a73", "#04c5b8", "#d7dcdf"
 
@@ -36,7 +44,7 @@ class Renderer:
     def __init__(self, font_path=""):
         candidates = [
             font_path,
-            str(Path(__file__).parent / "fonts/NotoSansCJKsc-Regular.otf"),
+            str(ASSET_ROOT / "fonts/NotoSansCJKsc-Regular.otf"),
             "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
             "C:/Windows/Fonts/msyh.ttc",
         ]
@@ -44,7 +52,7 @@ class Renderer:
         if not self.font_path:
             raise ValueError("未找到中日文字体，请设置 font_path")
         self.fonts, self.assets = {}, {}
-        for path in (Path(__file__).parent / "assets").glob("*.png"):
+        for path in (ASSET_ROOT / "images").glob("*.png"):
             with Image.open(path) as source:
                 self.assets[path.stem] = source.convert("RGBA")
 

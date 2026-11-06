@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from astrbot_plugin_pjsk.render import Renderer
-from astrbot_plugin_pjsk.service import Service
+from astrbot_plugin_pjsk.rendering.render import Renderer
+from astrbot_plugin_pjsk.services.service import Service
 
 
 class LongImageTests(unittest.TestCase):

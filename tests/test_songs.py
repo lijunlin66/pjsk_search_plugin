@@ -11,9 +11,18 @@ import httpx
 from PIL import Image, ImageChops, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from astrbot_plugin_pjsk.render import Renderer
-from astrbot_plugin_pjsk.song_ui import alias_layout, alias_text_positions, song_image
-from astrbot_plugin_pjsk.songs import SongIndex, SongService, clean_aliases, parse_chart
+from astrbot_plugin_pjsk.rendering.render import Renderer
+from astrbot_plugin_pjsk.rendering.song_ui import (
+    alias_layout,
+    alias_text_positions,
+    song_image,
+)
+from astrbot_plugin_pjsk.services.songs import (
+    SongIndex,
+    SongService,
+    clean_aliases,
+    parse_chart,
+)
 
 
 class SearchTests(unittest.TestCase):
@@ -91,7 +100,7 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(index.display_aliases[1], ["TYW", "tyw", "t.y.w", long_alias])
 
     def test_details_and_candidates_render_every_alias_inside_image(self):
-        import astrbot_plugin_pjsk.song_ui as ui
+        import astrbot_plugin_pjsk.rendering.song_ui as ui
 
         aliases = [f"别名 {i:03d}" for i in range(120)] + ["LAST_ALIAS_UNIQUE"]
         index = SongIndex(
@@ -117,7 +126,7 @@ class SearchTests(unittest.TestCase):
                 )
 
     def test_alias_ink_is_centered_for_cjk_latin_and_multiline(self):
-        from astrbot_plugin_pjsk.help_ui import text
+        from astrbot_plugin_pjsk.rendering.help_ui import text
 
         renderer = Renderer()
         for lines in (["火锅"], ["Agy"], ["!!!"], ["Hello", "国服别名"]):
@@ -148,8 +157,8 @@ class SearchTests(unittest.TestCase):
 
 class ChartTests(unittest.IsolatedAsyncioTestCase):
     async def test_default_alias_failure_uses_cdn_without_adding_jp_only_songs(self):
-        from astrbot_plugin_pjsk.service import DataUnavailable
-        from astrbot_plugin_pjsk.songs import ALIASES, ALIASES_CDN
+        from astrbot_plugin_pjsk.services.service import DataUnavailable
+        from astrbot_plugin_pjsk.services.songs import ALIASES, ALIASES_CDN
 
         seen = []
 
