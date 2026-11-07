@@ -16,7 +16,7 @@ from .service import DataUnavailable, atomic_write
 REGIONS = {"jp": "日服", "cn": "国服"}
 JP_RANK = "https://rks-n.pjsk.moe/api/public/v2"
 CN_RANK = "https://rks-n-cn.exmeaning.com/api/public/v2"
-CN_PREDICTION = "https://rk.exmeaning.com/public/event"
+PREDICTION_BASE = "https://rk.exmeaning.com/public/event"
 CN_MASTER = "https://sekai-master-cdn.haruki.seiunx.com/haruki-sekai-sc-master/master"
 CN_ASSET = "https://storage.exmeaning.com/sekai-cn-assets"
 FEATURED_TIERS = (1, 10, 50, 100, 500, 1000, 5000, 10000, 20000, 30000)
@@ -571,16 +571,16 @@ class LiveService:
 
     async def prediction(self, current):
         await self.ranking(current)
-        latest, event = current["ranking"], current["event"]
+        latest, event, region = current["ranking"], current["event"], current["region"]
         upstream = None
-        url = f"{CN_PREDICTION}/{event['id']}/latest?region=cn"
+        url = f"{PREDICTION_BASE}/{event['id']}/latest?region={region}"
         try:
             snapshot, _, stale = await self.load(url, 120, 900, normalize_prediction)
             now = int(time.time() * 1000)
             stamp = snapshot["updated_at"]
             if (
                 snapshot["event_id"] == event["id"]
-                and snapshot["region"] in (None, "cn")
+                and snapshot["region"] in (None, region)
                 and snapshot["status"] == "active"
                 and event["startAt"] <= stamp < event["aggregateAt"]
                 and now - 900000 <= stamp <= now + 300000

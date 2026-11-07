@@ -4,7 +4,7 @@ from PIL import ImageDraw
 
 from .render import GRAY, INK
 
-GUIDE_REVISION = "1.6.1-prediction"
+GUIDE_REVISION = "1.6.2-prediction"
 ACCENT = "#078e86"
 
 # Commands and descriptions occupy fixed columns; long values wrap within a cell.
@@ -116,6 +116,7 @@ SECTIONS = [
             ("/cn时速", "国服当前活动十个指定档位的积分与一小时时速。"),
             ("/jp时速", "日服当前活动时速，档位与国服相同。"),
             ("/cn榜线预测", "国服当前活动十个指定档位的结算预测，档位与时速相同。"),
+            ("/jp榜线预测", "日服当前活动结算预测，展示相同的十个档位。"),
         ],
         [
             "cn 表示国服，jp 表示日服；上述指令无需再填写服别或活动编号。",

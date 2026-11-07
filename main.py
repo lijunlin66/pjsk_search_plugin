@@ -43,7 +43,7 @@ class PjskPlugin(Star):
         await self.help_image("all")
         await self.help_image("card", True)
         await self.help_image("event", True)
-        logger.info("pjsk查询工具 1.6.1 已加载，主数据在后台准备")
+        logger.info("pjsk查询工具 1.6.2 已加载，主数据在后台准备")
 
     def status(self):
         stamp = datetime.fromtimestamp(
@@ -320,6 +320,12 @@ class PjskPlugin(Star):
     async def prediction_cn(self, event: AstrMessageEvent):
         """查询国服当前活动十档结算预测。"""
         async for result in self.live_lookup(event, region="cn", prediction=True):
+            yield result
+
+    @filter.command("jp榜线预测")
+    async def prediction_jp(self, event: AstrMessageEvent):
+        """查询日服当前活动十档结算预测。"""
+        async for result in self.live_lookup(event, region="jp", prediction=True):
             yield result
 
     async def live_lookup(

@@ -206,6 +206,8 @@ class LiveCacheTests(unittest.IsolatedAsyncioTestCase):
         }
 
         async def handler(request):
+            if request.url.params:
+                self.assertEqual(request.url.params["region"], latest["region"])
             return httpx.Response(200, json=upstream if request.url.params else latest)
 
         await self.client.aclose()
@@ -224,6 +226,12 @@ class LiveCacheTests(unittest.IsolatedAsyncioTestCase):
         self.live = LiveService(self.owner)
         result = await self.live.prediction(current.copy())
         self.assertEqual(result["prediction"]["rankings"][2]["forecast"], 200)
+
+        latest["region"] = "jp"
+        upstream.update(event_id=10, region="jp")
+        upstream["items"][0]["prediction"] = 450
+        result = await self.live.prediction(current | {"region": "jp"})
+        self.assertEqual(result["prediction"]["rankings"][2]["forecast"], 450)
 
     async def test_concurrent_requests_share_cache_and_regions_stay_separate(self):
         jp, cn = "https://example.com/jp/latest", "https://example.com/cn/latest"
