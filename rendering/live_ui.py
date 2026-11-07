@@ -33,13 +33,16 @@ def centered(renderer, draw, box, text, size=22, color=INK):
     )
 
 
-def live_image(renderer, current, banner=None, borders=False):
+def live_image(renderer, current, banner=None, borders=False, speed=False):
+    borders = borders or speed
     event, region = current["event"], current["region"]
     now = int(time.time() * 1000)
     title = renderer.wrap(event["name"], 32, 1080)
-    ranking = current.get("ranking", {})
+    ranking = current.get("speed" if speed else "ranking", {})
     tiers = [
-        r for r in ranking.get("rankings", []) if r["rank"] in TIERS or r["rank"] > 100
+        r
+        for r in ranking.get("rankings", [])
+        if speed or r["rank"] in TIERS or r["rank"] > 100
     ][:100]
     info = []
     if not borders:
@@ -75,7 +78,14 @@ def live_image(renderer, current, banner=None, borders=False):
         40,
         28,
         1120,
-        f"{REGIONS[region]} · {'当前活动榜线 · 综合榜' if borders else '当前正在进行的活动'}",
+        f"{REGIONS[region]} · "
+        + (
+            "当前排行榜时速 · 综合榜"
+            if speed
+            else "当前活动榜线 · 综合榜"
+            if borders
+            else "当前正在进行的活动"
+        ),
     )
     y = 96
     for line in title:
@@ -107,7 +117,8 @@ def live_image(renderer, current, banner=None, borders=False):
             renderer,
             d,
             (40, y, 1120, 50),
-            "榜线更新时间 · " + local_date(ranking["updated_at"]),
+            ("时速采样时间 · " if speed else "榜线更新时间 · ")
+            + local_date(ranking["updated_at"]),
             22,
             "#168d85",
         )
@@ -115,24 +126,68 @@ def live_image(renderer, current, banner=None, borders=False):
         for col in range(2):
             x = 40 + col * 570
             d.rounded_rectangle((x, y, x + 550, y + 46), 10, fill="#e8f1f4")
-            centered(renderer, d, (x, y, 170, 46), "档位", 21, GRAY)
-            centered(renderer, d, (x + 170, y, 380, 46), "活动积分 PT", 21, GRAY)
+            if speed:
+                for offset, width, label in [
+                    (0, 130, "档位"),
+                    (130, 210, "活动积分 PT"),
+                    (340, 210, "时速 PT/h"),
+                ]:
+                    centered(renderer, d, (x + offset, y, width, 46), label, 20, GRAY)
+            else:
+                centered(renderer, d, (x, y, 170, 46), "档位", 21, GRAY)
+                centered(renderer, d, (x + 170, y, 380, 46), "活动积分 PT", 21, GRAY)
         y += 58
         for i, row in enumerate(tiers):
             x, cy = 40 + i % 2 * 570, y + i // 2 * 62
             d.rounded_rectangle(
                 (x, cy, x + 550, cy + 52), 11, fill="white", outline="#e0ebed"
             )
-            centered(renderer, d, (x, cy, 170, 52), f"T{row['rank']:,}", 22, "#119f96")
-            centered(renderer, d, (x + 170, cy, 380, 52), f"{row['score']:,}", 24)
+            if speed:
+                centered(
+                    renderer, d, (x, cy, 130, 52), f"T{row['rank']}", 21, "#119f96"
+                )
+                score = row.get("score")
+                centered(
+                    renderer,
+                    d,
+                    (x + 130, cy, 210, 52),
+                    f"{score:,}" if score is not None else "暂无数据",
+                    22,
+                )
+                growth = row.get("growth_1h")
+                rate = (
+                    ("≈" if row.get("estimated") else "+") + f"{growth:,}"
+                    if growth is not None
+                    else "暂无数据"
+                )
+                centered(
+                    renderer,
+                    d,
+                    (x + 340, cy, 210, 52),
+                    rate,
+                    22,
+                    "#168d85" if growth is not None else GRAY,
+                )
+            else:
+                centered(
+                    renderer, d, (x, cy, 170, 52), f"T{row['rank']:,}", 22, "#119f96"
+                )
+                centered(renderer, d, (x + 170, cy, 380, 52), f"{row['score']:,}", 24)
         y += math.ceil(len(tiers) / 2) * 62 + 16
         note = "来源：Moesekai 社区榜线 · " + (
             "上游更新延迟 / 缓存数据"
-            if current.get("ranking_stale")
+            if current.get("ranking_stale") or current.get("speed_stale")
             else "按需读取，可能存在采样延迟"
         )
         if current.get("ranking_clock_skew"):
             note = "来源：Moesekai 社区榜线 · 上游时钟偏差，保留原始采样时间"
+        if speed:
+            for line in [
+                "≈ 为档位历史采样按实际间隔折算；其余为上游近1小时涨分。",
+                "缺少有效样本显示暂无数据；开场不足1小时的上游涨分仅覆盖已采集时段。",
+            ]:
+                centered(renderer, d, (40, y, 1120, 32), line, 19, GRAY)
+                y += 38
     else:
         for label, values in rows:
             height = max(70, len(values) * 34 + 24)

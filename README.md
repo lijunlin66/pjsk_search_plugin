@@ -2,7 +2,7 @@
 
 <img src="logo.png" width="128" height="128" alt="pjsk查询工具图标">
 
-适用于 AstrBot 4.29.1–4.x 的世界计划日服卡面与活动图鉴插件，支持国服/日服当前活动和榜线查询。插件标识为 `astrbot_plugin_pjsk`，展示名为 **pjsk查询工具**。作者：lijunlin66，版本：1.5.0。
+适用于 AstrBot 4.29.1–4.x 的世界计划日服卡面与活动图鉴插件，支持国服/日服当前活动和榜线查询。插件标识为 `astrbot_plugin_pjsk`，展示名为 **pjsk查询工具**。作者：lijunlin66，版本：1.6.0。
 
 ## 数据来源
 
@@ -21,7 +21,7 @@
 https://github.com/lijunlin66/pjsk_search_plugin
 ```
 
-也可上传 `astrbot_plugin_pjsk-1.5.0.zip`，然后启用。也可将此目录放入 `AstrBot/data/plugins/astrbot_plugin_pjsk` 后重载。依赖由 `requirements.txt` 声明：HTTPX、Pillow、pjsekai-scores-rs。Python 需 3.10 或以上，以所用 AstrBot 版本的 Python 要求为准。
+也可上传 `astrbot_plugin_pjsk-1.6.0.zip`，然后启用。也可将此目录放入 `AstrBot/data/plugins/astrbot_plugin_pjsk` 后重载。依赖由 `requirements.txt` 声明：HTTPX、Pillow、pjsekai-scores-rs。Python 需 3.10 或以上，以所用 AstrBot 版本的 Python 要求为准。
 
 默认无需密钥、游戏账号、浏览器或额外渲染服务。附带 Noto CJK 中日文字体及 OFL 许可证，Linux 容器也可直接绘图。需能访问 `sekai-world.github.io` 与 `storage.sekai.best`。当前声明和验证目标为 OneBot v11（`aiocqhttp`）；其他平台未做实际适配器验证。
 
@@ -116,7 +116,7 @@ astrbot_plugin_pjsk/
 
 歌曲及别名表缓存 6 小时，失败最多复用 7 天旧数据并提示；没有缓存时可降级为 ID/原名搜索。谱面成图缓存 24 小时，完整 URL、国服标题、等级、字体与绘图版本参与缓存键。图片与谱面统一纳入 cache_mb 清理，默认 2048 MB（2 GiB），最大 8192 MB（8 GiB）；不是启动时预分配磁盘空间。已有实例的 cache_mb 保持原值，不因默认值调整自动覆盖。`song_alias_url` 可配置兼容结构的 HTTPS 镜像。
 
-## 当前活动与活动榜线（国服 / 日服）
+## 当前活动、活动榜线与时速（国服 / 日服）
 
 | 指令 | 说明 |
 | --- | --- |
@@ -124,10 +124,14 @@ astrbot_plugin_pjsk/
 | `/jp当前活动` | 日服正在进行的活动 |
 | `/cn榜线` | 国服当前活动综合榜的常见档位积分和上游更新时间 |
 | `/jp榜线` | 日服当前活动综合榜线 |
+| `/cn时速` | 国服当前活动综合榜指定档位时速 |
+| `/jp时速` | 日服当前活动综合榜指定档位时速 |
 
 服别由指令中的 cn/jp 前缀确定，不需要另外填写参数。在任一指令后加“帮助”可查看用法。已有查卡及历史活动查询仍为日服。
 
 按所选服的 `startAt ≤ 当前时间 < aggregateAt` 判断正在进行；活动间歇期明确提示没有进行中活动，并在主数据已提供时给出下期开始时间。两服活动 ID 和日期分别读取，不按日服编号推测国服。当前活动图展示社区主数据中的原始标题、本服横幅及本服卡面缩略图；每张卡显示 ID、角色和属性。卡片资料优先复用日服已有目录；需要读取本服 cards 表时逐条精简解析，首次准备可能较慢，之后复用 6 小时的轻量资料缓存与图片缓存。关联资料缺失时明确保留占位说明。
+
+时速固定展示 **T1、T10、T50、T100、T500、T1000、T5000、T10000、T20000、T30000**，不展示全部前 100 名。T100 以内读取上游 `growth_1h`；其余档位结合当前积分与约一小时前的同档位历史采样，按实际 60–70 分钟间隔折算 PT/h，并以 ≈ 标记。未取得有效采样、积分回退或缺少档位时显示“暂无数据”，不补零、不跨活动拼接。开场不足一小时的上游涨分仅覆盖已采集时段。来源为同一公开 API 的 `/churn` 与 `/tier-series`，服别、活动编号、采样时效均校验，缓存 60 秒。
 
 活动榜线来自 Moesekai 公开 v2 API（[接口调用源码](https://github.com/moe-sekai/Moesekai/blob/main/web/src/lib/realtime-ranking-api.ts)、[线路配置](https://github.com/moe-sekai/Moesekai/blob/main/web/src/lib/realtime-ranking-line.ts)）。这是**综合榜活动积分 PT**，不包含 WL 角色单榜和预测分数。只保留档位、积分与时间，不存储玩家昵称、UID 或个人资料。返回的服别、活动 ID、开始与结算时间必须与当前活动一致，避免混服或显示上期榜线。
 

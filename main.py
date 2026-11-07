@@ -43,7 +43,7 @@ class PjskPlugin(Star):
         await self.help_image("all")
         await self.help_image("card", True)
         await self.help_image("event", True)
-        logger.info("pjsk查询工具 1.5.0 已加载；主数据在后台准备")
+        logger.info("pjsk查询工具 1.6.0 已加载；主数据在后台准备")
 
     def status(self):
         stamp = datetime.fromtimestamp(
@@ -88,7 +88,7 @@ class PjskPlugin(Star):
                     return
                 detail = len(cards) == 1
                 cache_key = hashlib.sha256(
-                    f"v1.5.0-upload|{self.service.revision}|{self.service.master_base}|{self.service.asset_base}|{query}|{self.renderer.font_path}|{self.config.get('character_aliases', '')}".encode()
+                    f"v1.6.0-upload|{self.service.revision}|{self.service.master_base}|{self.service.asset_base}|{query}|{self.renderer.font_path}|{self.config.get('character_aliases', '')}".encode()
                 ).hexdigest()
                 path = self.service.render_dir / (cache_key + ".img")
                 complete = True
@@ -229,7 +229,7 @@ class PjskPlugin(Star):
                 paths = []
                 for i in range(len(batches)):
                     key = hashlib.sha256(
-                        f"event-1.5.0-batch2-14mp|{revision}|{query}|{i}|{len(batches)}|{self.service.asset_base}|{self.renderer.font_path}".encode()
+                        f"event-1.6.0-batch2-14mp|{revision}|{query}|{i}|{len(batches)}|{self.service.asset_base}|{self.renderer.font_path}".encode()
                     ).hexdigest()
                     paths.append(self.service.render_dir / (key + ".img"))
                 images = []
@@ -304,7 +304,19 @@ class PjskPlugin(Star):
         async for result in self.live_lookup(event, region="jp", borders=True):
             yield result
 
-    async def live_lookup(self, event, region, borders=False):
+    @filter.command("cn时速")
+    async def speed_cn(self, event: AstrMessageEvent):
+        """查询国服当前活动综合榜最近一小时涨分。"""
+        async for result in self.live_lookup(event, region="cn", speed=True):
+            yield result
+
+    @filter.command("jp时速")
+    async def speed_jp(self, event: AstrMessageEvent):
+        """查询日服当前活动综合榜最近一小时涨分。"""
+        async for result in self.live_lookup(event, region="jp", speed=True):
+            yield result
+
+    async def live_lookup(self, event, region, borders=False, speed=False):
         parts = event.get_message_str().strip().split(maxsplit=1)
         query = parts[1] if len(parts) > 1 else ""
         if query:
@@ -325,20 +337,20 @@ class PjskPlugin(Star):
                     yield event.plain_result(message)
                     return
                 current = await (
-                    self.service.live.ranking(current)
-                    if borders
+                    self.service.live.ranking(current, speed=speed)
+                    if borders or speed
                     else self.service.live.enrich(current)
                 )
                 banner = await self.service.live.banner(current)
                 data = await asyncio.to_thread(
-                    live_image, self.renderer, current, banner, borders
+                    live_image, self.renderer, current, banner, borders or speed, speed
                 )
                 await self.deliver_image(event, data)
         except DataUnavailable as exc:
             yield event.plain_result(str(exc))
         except Exception as exc:  # noqa: BLE001 - isolate failures at the message boundary
             logger.exception(f"PJSK 当前活动查询失败：{type(exc).__name__}")
-            yield event.plain_result("当前活动或榜线查询失败，请稍后重试。")
+            yield event.plain_result("当前活动、榜线或时速查询失败，请稍后重试。")
         finally:
             self.busy = False
 

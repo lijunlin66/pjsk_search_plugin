@@ -17,6 +17,7 @@ JP_RANK = "https://rks-n.pjsk.moe/api/public/v2"
 CN_RANK = "https://rks-n-cn.exmeaning.com/api/public/v2"
 CN_MASTER = "https://sekai-master-cdn.haruki.seiunx.com/haruki-sekai-sc-master/master"
 CN_ASSET = "https://storage.exmeaning.com/sekai-cn-assets"
+SPEED_TIERS = (1, 10, 50, 100, 500, 1000, 5000, 10000, 20000, 30000)
 TIERS = {
     1,
     10,
@@ -93,6 +94,94 @@ def validate_ranking(data, region, event, now):
         raise DataUnavailable("当前活动暂时没有可用榜线。")
 
 
+def normalize_speed(data):
+    """Keep server-computed rolling growth; missing samples are never zero-filled."""
+    result = normalize_ranking(data)
+    growth = {}
+    for row in data["rankings"]:
+        if not isinstance(row, dict):
+            continue
+        rank, value = row.get("rank"), row.get("growth_1h")
+        if type(rank) is int and type(value) is int and value >= 0:
+            growth[rank] = value
+    for row in result["rankings"]:
+        row["growth_1h"] = growth.get(row["rank"])
+    result["board_type"] = data.get("board_type")
+    return result
+
+
+def validate_speed(data, current, now):
+    event = current["event"]
+    if (
+        data.get("region") != current["region"]
+        or data.get("event_id") != event["id"]
+        or data.get("board_type") not in (None, "overall")
+    ):
+        raise DataUnavailable("时速数据尚未同步到当前活动综合榜，请稍后重试。")
+    stamp = data.get("updated_at")
+    if (
+        type(stamp) not in (int, float)
+        or not event["startAt"] <= stamp < event["aggregateAt"]
+        or stamp > now + 300000
+        or now - stamp > 900000
+        or abs(stamp - current["ranking"]["updated_at"]) > 300000
+    ):
+        raise DataUnavailable("时速采样已过期或与当前榜线不同步，请稍后重试。")
+    if not any(r.get("growth_1h") is not None for r in data["rankings"]):
+        raise DataUnavailable("当前活动尚无可用的一小时时速样本，请稍后重试。")
+
+
+def normalize_series(data):
+    if not isinstance(data, dict) or not isinstance(data.get("tiers"), dict):
+        raise TypeError("Invalid tier series")
+    return {k: data.get(k) for k in ("region", "event_id", "updated_at")} | {
+        "tiers": {
+            str(rank): sorted(
+                (
+                    {"t": p["t"], "s": p["s"]}
+                    for p in data["tiers"].get(str(rank), [])
+                    if isinstance(p, dict)
+                    and type(p.get("t")) is int
+                    and type(p.get("s")) is int
+                    and p["s"] >= 0
+                ),
+                key=lambda p: p["t"],
+            )
+            for rank in SPEED_TIERS
+            if rank > 100
+        }
+    }
+
+
+def speed_rows(latest, churn, series=None):
+    """Never compare players across ranks; sample the same cutoff in one event."""
+    scores = {r["rank"]: r["score"] for r in latest["rankings"]}
+    growth = {r["rank"]: r for r in churn["rankings"]}
+    rows = []
+    for rank in SPEED_TIERS:
+        row = {"rank": rank, "score": scores.get(rank), "growth_1h": None}
+        if rank <= 100 and rank in growth:
+            row.update(growth[rank])
+        elif series and row["score"] is not None:
+            end = latest["updated_at"]
+            target = end - 3600000
+            samples = [
+                p
+                for p in series["tiers"].get(str(rank), [])
+                if target - 600000 <= p["t"] <= target
+            ]
+            if samples:
+                p = samples[-1]
+                delta = row["score"] - p["s"]
+                if delta >= 0:
+                    row.update(
+                        growth_1h=round(delta * 3600000 / (end - p["t"])),
+                        estimated=True,
+                    )
+        rows.append(row)
+    return rows
+
+
 class LiveService:
     def __init__(self, owner):
         self.owner = owner
@@ -100,10 +189,12 @@ class LiveService:
         self.root.mkdir(exist_ok=True)
         self.memory, self.locks, self.failures = {}, {}, {}
 
-    async def load(self, url, ttl, max_age, cleaner, stream_cards=False):
+    async def load(
+        self, url, ttl, max_age, cleaner, stream_cards=False, cache_url=None
+    ):
         if not url.startswith("https://"):
             raise DataUnavailable("实时查询数据地址必须使用 HTTPS。")
-        key = hashlib.sha256(url.encode()).hexdigest()
+        key = hashlib.sha256((cache_url or url).encode()).hexdigest()
         async with self.locks.setdefault(key, asyncio.Lock()):
             path = self.root / (key + ".json")
             if key not in self.memory and path.exists():
@@ -353,7 +444,7 @@ class LiveService:
         current["card_images"] = await self.card_thumbnails(current)
         return current
 
-    async def ranking(self, current):
+    async def ranking(self, current, speed=False):
         region, event = current["region"], current["event"]
         base = self.owner.config.get(
             "ranking_jp_base" if region == "jp" else "ranking_cn_base",
@@ -370,6 +461,43 @@ class LiveService:
                 )
                 now = int(time.time() * 1000)
                 validate_ranking(data, region, event, now)
+                if speed:
+                    rates, _, rates_stale = await self.load(
+                        f"{source}/{region}/churn", 60, 900, normalize_speed
+                    )
+                    validate_speed(rates, current | {"ranking": data}, now)
+                    series = None
+                    series_stale = False
+                    tiers = ",".join(str(r) for r in SPEED_TIERS if r > 100)
+                    series_url = f"{source}/{region}/tier-series?tiers={tiers}"
+                    try:
+                        candidate, _, series_stale = await self.load(
+                            f"{series_url}&since={now - 7800000}",
+                            60,
+                            900,
+                            normalize_series,
+                            cache_url=series_url,
+                        )
+                        if (
+                            candidate.get("region") == region
+                            and candidate.get("event_id") == event["id"]
+                            and type(candidate.get("updated_at")) is int
+                            and abs(candidate["updated_at"] - data["updated_at"])
+                            <= 300000
+                        ):
+                            series = candidate
+                        else:
+                            series_stale = True
+                    except DataUnavailable:
+                        series_stale = True
+                    rates = rates | {"rankings": speed_rows(data, rates, series)}
+                    current.update(
+                        speed=rates
+                        | {"updated_at": min(rates["updated_at"], data["updated_at"])},
+                        speed_stale=rates_stale
+                        or series_stale
+                        or now - rates["updated_at"] > 300000,
+                    )
                 current.update(
                     ranking=data,
                     ranking_fetched=fetched,

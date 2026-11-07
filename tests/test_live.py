@@ -15,10 +15,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from astrbot_plugin_pjsk.rendering.live_ui import live_image
 from astrbot_plugin_pjsk.rendering.render import Renderer
 from astrbot_plugin_pjsk.services.live import (
+    SPEED_TIERS,
     LiveService,
     active_event,
     normalize_ranking,
+    normalize_series,
+    normalize_speed,
+    speed_rows,
     validate_ranking,
+    validate_speed,
 )
 from astrbot_plugin_pjsk.services.service import DataUnavailable
 
@@ -54,6 +59,67 @@ def ranking(now):
 
 
 class LivePureTests(unittest.TestCase):
+    def test_speed_tiers_missing_zero_and_history_conversion(self):
+        now = 10000000
+        latest = normalize_ranking(ranking(now))
+        latest["rankings"] += [{"rank": 500, "score": 200000}]
+        rates = normalize_speed(
+            ranking(now)
+            | {
+                "rankings": [
+                    {"rank": 1, "score": 100, "growth_1h": 0, "name": "private"},
+                    {"rank": 10, "score": 200, "growth_1h": -1},
+                    {"rank": 50, "score": 300, "growth_1h": True},
+                ]
+            }
+        )
+        series = normalize_series(
+            {"tiers": {"500": [{"t": now - 3900000, "s": 70000}]}}
+        )
+        rows = speed_rows(latest, rates, series)
+        self.assertEqual([r["rank"] for r in rows], list(SPEED_TIERS))
+        self.assertEqual(rows[0]["growth_1h"], 0)
+        self.assertNotIn("name", rows[0])
+        self.assertIsNone(rows[1]["growth_1h"])
+        self.assertIsNone(rows[2]["growth_1h"])
+        self.assertEqual(rows[4]["growth_1h"], 120000)
+        self.assertTrue(rows[4]["estimated"])
+        self.assertIsNone(rows[-1]["score"])
+        series["tiers"]["500"][0]["s"] = 300000
+        self.assertIsNone(speed_rows(latest, rates, series)[4]["growth_1h"])
+
+    def test_speed_rejects_wrong_event_board_and_stale_samples(self):
+        now = 10000000
+        e = event(now) | {"startAt": now - 7200000}
+        latest = normalize_ranking(ranking(now))
+        rates = normalize_speed(
+            ranking(now) | {"rankings": [{"rank": 1, "score": 100, "growth_1h": 10}]}
+        )
+        current = {"region": "cn", "event": e, "ranking": latest}
+        validate_speed(rates, current, now)
+        for change in [
+            {"region": "jp"},
+            {"event_id": 11},
+            {"board_type": "worldlink"},
+            {"updated_at": now - 900001},
+            {"updated_at": now + 300001},
+            {"updated_at": now - 300001},
+        ]:
+            with self.subTest(change=change), self.assertRaises(DataUnavailable):
+                validate_speed(rates | change, current, now)
+
+    def test_speed_image_handles_all_ten_rows_with_missing_samples(self):
+        now = int(time.time() * 1000)
+        value = {"region": "cn", "event": event(now), "fetched_at": now / 1000}
+        latest = normalize_ranking(ranking(now))
+        value["speed"] = latest | {
+            "rankings": speed_rows(latest, normalize_speed(ranking(now)))
+        }
+        with Image.open(io.BytesIO(live_image(Renderer(), value, speed=True))) as im:
+            im.load()
+            self.assertEqual(im.width, 1200)
+            self.assertLess(im.height, 1800)
+
     def test_current_bounds_and_gap(self):
         e = event(10000)
         self.assertIsNone(active_event([e], e["startAt"] - 1))
