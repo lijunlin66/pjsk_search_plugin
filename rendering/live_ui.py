@@ -34,15 +34,19 @@ def centered(renderer, draw, box, text, size=22, color=INK):
 
 
 def live_image(renderer, current, banner=None, borders=False, speed=False):
-    borders = borders or speed
+    prediction = "prediction" in current
+    extra_column = speed or prediction
+    borders = borders or extra_column
     event, region = current["event"], current["region"]
     now = int(time.time() * 1000)
     title = renderer.wrap(event["name"], 32, 1080)
-    ranking = current.get("speed" if speed else "ranking", {})
+    ranking = current.get(
+        "prediction" if prediction else "speed" if speed else "ranking", {}
+    )
     tiers = [
         r
         for r in ranking.get("rankings", [])
-        if speed or r["rank"] in TIERS or r["rank"] > 100
+        if extra_column or r["rank"] in TIERS or r["rank"] > 100
     ][:100]
     info = []
     if not borders:
@@ -80,7 +84,9 @@ def live_image(renderer, current, banner=None, borders=False, speed=False):
         1120,
         f"{REGIONS[region]} · "
         + (
-            "当前排行榜时速 · 综合榜"
+            "当前活动榜线预测 · 综合榜"
+            if prediction
+            else "当前排行榜时速 · 综合榜"
             if speed
             else "当前活动榜线 · 综合榜"
             if borders
@@ -113,12 +119,15 @@ def live_image(renderer, current, banner=None, borders=False, speed=False):
     y += 10
     if borders:
         d.rounded_rectangle((40, y, 1160, y + 50), 12, fill="#e6f8f5")
+        stamp_label = "时速采样时间" if speed else "榜线采样时间"
+        stamp = f"{stamp_label} · {local_date(ranking['updated_at'])}"
+        if prediction and current.get("prediction_source_at"):
+            stamp += "    上游预测 · " + local_date(current["prediction_source_at"])
         centered(
             renderer,
             d,
             (40, y, 1120, 50),
-            ("时速采样时间 · " if speed else "榜线更新时间 · ")
-            + local_date(ranking["updated_at"]),
+            stamp,
             22,
             "#168d85",
         )
@@ -126,11 +135,11 @@ def live_image(renderer, current, banner=None, borders=False, speed=False):
         for col in range(2):
             x = 40 + col * 570
             d.rounded_rectangle((x, y, x + 550, y + 46), 10, fill="#e8f1f4")
-            if speed:
+            if extra_column:
                 for offset, width, label in [
                     (0, 130, "档位"),
                     (130, 210, "活动积分 PT"),
-                    (340, 210, "时速 PT/h"),
+                    (340, 210, "结算预测 PT" if prediction else "时速 PT/h"),
                 ]:
                     centered(renderer, d, (x + offset, y, width, 46), label, 20, GRAY)
             else:
@@ -142,7 +151,7 @@ def live_image(renderer, current, banner=None, borders=False, speed=False):
             d.rounded_rectangle(
                 (x, cy, x + 550, cy + 52), 11, fill="white", outline="#e0ebed"
             )
-            if speed:
+            if extra_column:
                 centered(
                     renderer, d, (x, cy, 130, 52), f"T{row['rank']}", 21, "#119f96"
                 )
@@ -154,19 +163,15 @@ def live_image(renderer, current, banner=None, borders=False, speed=False):
                     f"{score:,}" if score is not None else "暂无数据",
                     22,
                 )
-                growth = row.get("growth_1h")
-                rate = (
-                    ("≈" if row.get("estimated") else "+") + f"{growth:,}"
-                    if growth is not None
-                    else "暂无数据"
-                )
+                value = row.get("forecast" if prediction else "growth_1h")
+                prefix = "≈" if row.get("estimated") else "" if prediction else "+"
                 centered(
                     renderer,
                     d,
                     (x + 340, cy, 210, 52),
-                    rate,
+                    f"{prefix}{value:,}" if value is not None else "暂无数据",
                     22,
-                    "#168d85" if growth is not None else GRAY,
+                    "#168d85" if value is not None else GRAY,
                 )
             else:
                 centered(
@@ -181,13 +186,22 @@ def live_image(renderer, current, banner=None, borders=False, speed=False):
         )
         if current.get("ranking_clock_skew"):
             note = "来源：Moesekai 社区榜线 · 上游时钟偏差，保留原始采样时间"
-        if speed:
-            for line in [
+        notes = []
+        if prediction:
+            if current.get("prediction_stale"):
+                note += " · 上游预测有延迟"
+            notes = [
+                "≈ 为按本期已采集的平均涨分估算。其余数值为 Moesekai 上游预测。",
+                "预测值会随榜线变化，最终分数以游戏结算为准。时间为 UTC+8。",
+            ]
+        elif speed:
+            notes = [
                 "≈ 为档位历史采样按实际间隔折算；其余为上游近1小时涨分。",
                 "缺少有效样本显示暂无数据；开场不足1小时的上游涨分仅覆盖已采集时段。",
-            ]:
-                centered(renderer, d, (40, y, 1120, 32), line, 19, GRAY)
-                y += 38
+            ]
+        for line in notes:
+            centered(renderer, d, (40, y, 1120, 32), line, 19, GRAY)
+            y += 38
     else:
         for label, values in rows:
             height = max(70, len(values) * 34 + 24)

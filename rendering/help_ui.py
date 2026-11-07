@@ -4,7 +4,7 @@ from PIL import ImageDraw
 
 from .render import GRAY, INK
 
-GUIDE_REVISION = "1.6.0-speed-1"
+GUIDE_REVISION = "1.6.1-prediction"
 ACCENT = "#078e86"
 
 # Commands and descriptions occupy fixed columns; long values wrap within a cell.
@@ -115,13 +115,15 @@ SECTIONS = [
             ("/jp榜线", "日服当前活动综合榜线。"),
             ("/cn时速", "国服当前活动十个指定档位的积分与一小时时速。"),
             ("/jp时速", "日服当前活动时速，档位与国服相同。"),
+            ("/cn榜线预测", "国服当前活动十个指定档位的结算预测，档位与时速相同。"),
         ],
         [
             "cn 表示国服，jp 表示日服；上述指令无需再填写服别或活动编号。",
-            "活动间歇期会提示暂无进行中活动；榜线不包含 WL 角色单榜或预测分数。",
+            "活动间歇期会提示暂无进行中活动。上述榜线功能只查询综合榜。",
             "榜线有采样与缓存延迟，以图中上游更新时间为准；时间统一使用 UTC+8。",
             "时速档位：T1 / T10 / T50 / T100 / T500 / T1000 / T5000 / T10000 / T20000 / T30000。",
             "≈ 表示按历史采样间隔折算 PT/h；缺样本显示暂无数据，不代表零涨分。",
+            "预测图中的 ≈ 表示按本期平均涨分估算。最终分数以游戏结算为准。",
         ],
     ),
     (

@@ -43,7 +43,7 @@ class PjskPlugin(Star):
         await self.help_image("all")
         await self.help_image("card", True)
         await self.help_image("event", True)
-        logger.info("pjsk查询工具 1.6.0 已加载；主数据在后台准备")
+        logger.info("pjsk查询工具 1.6.1 已加载，主数据在后台准备")
 
     def status(self):
         stamp = datetime.fromtimestamp(
@@ -316,7 +316,15 @@ class PjskPlugin(Star):
         async for result in self.live_lookup(event, region="jp", speed=True):
             yield result
 
-    async def live_lookup(self, event, region, borders=False, speed=False):
+    @filter.command("cn榜线预测")
+    async def prediction_cn(self, event: AstrMessageEvent):
+        """查询国服当前活动十档结算预测。"""
+        async for result in self.live_lookup(event, region="cn", prediction=True):
+            yield result
+
+    async def live_lookup(
+        self, event, region, borders=False, speed=False, prediction=False
+    ):
         parts = event.get_message_str().strip().split(maxsplit=1)
         query = parts[1] if len(parts) > 1 else ""
         if query:
@@ -336,21 +344,27 @@ class PjskPlugin(Star):
                         message += f"\n下期：{following['name']}（ID {following['id']}）\n开始：{local_date(following['startAt'])} UTC+8"
                     yield event.plain_result(message)
                     return
-                current = await (
-                    self.service.live.ranking(current, speed=speed)
-                    if borders or speed
-                    else self.service.live.enrich(current)
-                )
+                if prediction:
+                    current = await self.service.live.prediction(current)
+                elif borders or speed:
+                    current = await self.service.live.ranking(current, speed=speed)
+                else:
+                    current = await self.service.live.enrich(current)
                 banner = await self.service.live.banner(current)
                 data = await asyncio.to_thread(
-                    live_image, self.renderer, current, banner, borders or speed, speed
+                    live_image,
+                    self.renderer,
+                    current,
+                    banner,
+                    borders=borders,
+                    speed=speed,
                 )
                 await self.deliver_image(event, data)
         except DataUnavailable as exc:
             yield event.plain_result(str(exc))
         except Exception as exc:  # noqa: BLE001 - isolate failures at the message boundary
             logger.exception(f"PJSK 当前活动查询失败：{type(exc).__name__}")
-            yield event.plain_result("当前活动、榜线或时速查询失败，请稍后重试。")
+            yield event.plain_result("活动查询失败，请稍后重试。")
         finally:
             self.busy = False
 

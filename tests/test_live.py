@@ -5,6 +5,7 @@ import sys
 import tempfile
 import time
 import unittest
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -15,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from astrbot_plugin_pjsk.rendering.live_ui import live_image
 from astrbot_plugin_pjsk.rendering.render import Renderer
 from astrbot_plugin_pjsk.services.live import (
-    SPEED_TIERS,
+    FEATURED_TIERS,
     LiveService,
     active_event,
     normalize_ranking,
@@ -77,7 +78,7 @@ class LivePureTests(unittest.TestCase):
             {"tiers": {"500": [{"t": now - 3900000, "s": 70000}]}}
         )
         rows = speed_rows(latest, rates, series)
-        self.assertEqual([r["rank"] for r in rows], list(SPEED_TIERS))
+        self.assertEqual([r["rank"] for r in rows], list(FEATURED_TIERS))
         self.assertEqual(rows[0]["growth_1h"], 0)
         self.assertNotIn("name", rows[0])
         self.assertIsNone(rows[1]["growth_1h"])
@@ -188,6 +189,41 @@ class LiveCacheTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         await self.client.aclose()
         self.temp.cleanup()
+
+    async def test_prediction_uses_current_event_and_fills_missing_tiers(self):
+        now = int(time.time() * 1000)
+        e = event(now) | {"startAt": now - 7200000, "aggregateAt": now + 7200000}
+        latest = ranking(now) | {
+            "start_at": e["startAt"],
+            "end_at": e["aggregateAt"],
+            "rankings": [{"rank": 1, "score": 1000}, {"rank": 50, "score": 100}],
+        }
+        upstream = {
+            "event_id": 10,
+            "status": "active",
+            "updated_at": datetime.fromtimestamp(now / 1000).astimezone().isoformat(),
+            "items": [{"rank": 50, "prediction": 350}, {"rank": 1, "prediction": 999}],
+        }
+
+        async def handler(request):
+            return httpx.Response(200, json=upstream if request.url.params else latest)
+
+        await self.client.aclose()
+        self.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        self.owner.client = self.client
+        current = {"region": "cn", "event": e}
+        result = await self.live.prediction(current.copy())
+        rows = result["prediction"]["rankings"]
+        self.assertEqual([r["rank"] for r in rows], list(FEATURED_TIERS))
+        self.assertEqual((rows[0]["forecast"], rows[0]["estimated"]), (2000, True))
+        self.assertEqual((rows[2]["forecast"], rows[2]["estimated"]), (350, False))
+        self.assertIsNone(rows[-1]["forecast"])
+        upstream["event_id"] = 9
+        for path in self.live.root.glob("*.json"):
+            path.unlink()
+        self.live = LiveService(self.owner)
+        result = await self.live.prediction(current.copy())
+        self.assertEqual(result["prediction"]["rankings"][2]["forecast"], 200)
 
     async def test_concurrent_requests_share_cache_and_regions_stay_separate(self):
         jp, cn = "https://example.com/jp/latest", "https://example.com/cn/latest"

@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import time
+from datetime import datetime
 from urllib.parse import urlparse
 
 import httpx
@@ -15,9 +16,10 @@ from .service import DataUnavailable, atomic_write
 REGIONS = {"jp": "日服", "cn": "国服"}
 JP_RANK = "https://rks-n.pjsk.moe/api/public/v2"
 CN_RANK = "https://rks-n-cn.exmeaning.com/api/public/v2"
+CN_PREDICTION = "https://rk.exmeaning.com/public/event"
 CN_MASTER = "https://sekai-master-cdn.haruki.seiunx.com/haruki-sekai-sc-master/master"
 CN_ASSET = "https://storage.exmeaning.com/sekai-cn-assets"
-SPEED_TIERS = (1, 10, 50, 100, 500, 1000, 5000, 10000, 20000, 30000)
+FEATURED_TIERS = (1, 10, 50, 100, 500, 1000, 5000, 10000, 20000, 30000)
 TIERS = {
     1,
     10,
@@ -147,7 +149,7 @@ def normalize_series(data):
                 ),
                 key=lambda p: p["t"],
             )
-            for rank in SPEED_TIERS
+            for rank in FEATURED_TIERS
             if rank > 100
         }
     }
@@ -158,7 +160,7 @@ def speed_rows(latest, churn, series=None):
     scores = {r["rank"]: r["score"] for r in latest["rankings"]}
     growth = {r["rank"]: r for r in churn["rankings"]}
     rows = []
-    for rank in SPEED_TIERS:
+    for rank in FEATURED_TIERS:
         row = {"rank": rank, "score": scores.get(rank), "growth_1h": None}
         if rank <= 100 and rank in growth:
             row.update(growth[rank])
@@ -179,6 +181,63 @@ def speed_rows(latest, churn, series=None):
                         estimated=True,
                     )
         rows.append(row)
+    return rows
+
+
+def normalize_prediction(data):
+    if not isinstance(data, dict) or not isinstance(data.get("items"), list):
+        raise TypeError("Invalid prediction snapshot")
+    timestamp = data.get("updated_at")
+    if not isinstance(timestamp, str):
+        raise TypeError("Invalid prediction timestamp")
+    if timestamp.endswith("Z"):
+        timestamp = timestamp[:-1] + "+00:00"
+    stamp = datetime.fromisoformat(timestamp)
+    if stamp.tzinfo is None:
+        raise ValueError("Prediction timestamp must include a timezone")
+    scores = {}
+    for row in data["items"]:
+        if not isinstance(row, dict) or row.get("is_final") is True:
+            continue
+        rank, value = row.get("rank"), row.get("prediction")
+        if (
+            type(rank) is int
+            and rank in FEATURED_TIERS
+            and type(value) is int
+            and value > 0
+        ):
+            scores[str(rank)] = value
+    return {
+        "event_id": data.get("event_id"),
+        "region": data.get("region"),
+        "status": data.get("status"),
+        "updated_at": int(stamp.timestamp() * 1000),
+        "scores": scores,
+    }
+
+
+def prediction_rows(latest, event, upstream):
+    current = {row["rank"]: row["score"] for row in latest["rankings"]}
+    elapsed = latest["updated_at"] - event["startAt"]
+    remaining = event["aggregateAt"] - latest["updated_at"]
+    rows = []
+    for rank in FEATURED_TIERS:
+        score = current.get(rank)
+        forecast = upstream.get(str(rank))
+        if forecast is not None and score is not None and forecast < score:
+            forecast = None
+        estimated = False
+        if (
+            forecast is None
+            and score is not None
+            and elapsed >= 3600000
+            and remaining > 0
+        ):
+            forecast = score + (score * remaining + elapsed // 2) // elapsed
+            estimated = True
+        rows.append(
+            {"rank": rank, "score": score, "forecast": forecast, "estimated": estimated}
+        )
     return rows
 
 
@@ -468,7 +527,7 @@ class LiveService:
                     validate_speed(rates, current | {"ranking": data}, now)
                     series = None
                     series_stale = False
-                    tiers = ",".join(str(r) for r in SPEED_TIERS if r > 100)
+                    tiers = ",".join(str(r) for r in FEATURED_TIERS if r > 100)
                     series_url = f"{source}/{region}/tier-series?tiers={tiers}"
                     try:
                         candidate, _, series_stale = await self.load(
@@ -509,6 +568,38 @@ class LiveService:
             except DataUnavailable as exc:
                 last_error = exc
         raise last_error
+
+    async def prediction(self, current):
+        await self.ranking(current)
+        latest, event = current["ranking"], current["event"]
+        upstream = None
+        url = f"{CN_PREDICTION}/{event['id']}/latest?region=cn"
+        try:
+            snapshot, _, stale = await self.load(url, 120, 900, normalize_prediction)
+            now = int(time.time() * 1000)
+            stamp = snapshot["updated_at"]
+            if (
+                snapshot["event_id"] == event["id"]
+                and snapshot["region"] in (None, "cn")
+                and snapshot["status"] == "active"
+                and event["startAt"] <= stamp < event["aggregateAt"]
+                and now - 900000 <= stamp <= now + 300000
+            ):
+                upstream = snapshot
+                current["prediction_stale"] = stale or now - stamp > 300000
+        except DataUnavailable:
+            pass
+        if not event["startAt"] <= latest["updated_at"] < event["aggregateAt"]:
+            raise DataUnavailable("当前活动榜线采样时间异常，暂时无法预测。")
+        rows = prediction_rows(latest, event, upstream["scores"] if upstream else {})
+        if not any(row["forecast"] is not None for row in rows):
+            raise DataUnavailable("当前活动预测样本不足，请稍后重试。")
+        current["prediction"] = {"updated_at": latest["updated_at"], "rankings": rows}
+        if upstream and any(
+            row["forecast"] is not None and not row["estimated"] for row in rows
+        ):
+            current["prediction_source_at"] = upstream["updated_at"]
+        return current
 
     async def banner(self, current):
         bundle = current["event"].get("assetbundleName", "")
